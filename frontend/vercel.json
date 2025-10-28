@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "installCommand": "npm ci --force",
+  "env": {
+    "ROLLUP_NO_NATIVE": "1"
+  }
+}
+

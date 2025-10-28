@@ -1,0 +1,374 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Novo esquema de cores escuro */
+    --background: 218 54% 7%; /* Mais escuro que #0f1932 */
+    --foreground: 160 84% 39%; /* #75d3af */
+
+    --card: 220 39% 12%; /* Mais escuro */
+    --card-foreground: 160 84% 39%; /* #75d3af */
+
+    --popover: 220 39% 12%;
+    --popover-foreground: 160 84% 39%;
+
+    --primary: 160 84% 39%; /* #75d3af */
+    --primary-foreground: 218 54% 7%; /* Mais escuro */
+
+    --secondary: 142 76% 36%; /* Verde complementar */
+    --secondary-foreground: 218 54% 7%;
+
+    --muted: 220 39% 18%; /* Mais escuro */
+    --muted-foreground: 160 50% 70%; /* Verde claro */
+
+    --accent: 160 84% 39%; /* #75d3af */
+    --accent-foreground: 218 54% 7%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 39% 18%; /* Bordas mais escuras */
+    --input: 220 39% 14%; /* Input mais escuro */
+    --ring: 160 84% 39%; /* #75d3af para focus */
+
+    --radius: 0.75rem;
+
+    /* Sidebar com tema escuro */
+    --sidebar-background: 218 54% 4%; /* Muito mais escuro */
+    --sidebar-foreground: 160 84% 39%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 218 54% 7%;
+    --sidebar-accent: 220 39% 12%;
+    --sidebar-accent-foreground: 160 84% 39%;
+    --sidebar-border: 220 39% 18%;
+    --sidebar-ring: 160 84% 39%;
+  }
+
+  .dark {
+    /* Mantém o mesmo esquema para modo escuro */
+    --background: 218 54% 7%;
+    --foreground: 160 84% 39%;
+
+    --card: 220 39% 12%;
+    --card-foreground: 160 84% 39%;
+
+    --popover: 220 39% 12%;
+    --popover-foreground: 160 84% 39%;
+
+    --primary: 160 84% 39%;
+    --primary-foreground: 218 54% 7%;
+
+    --secondary: 142 76% 36%;
+    --secondary-foreground: 218 54% 7%;
+
+    --muted: 220 39% 18%;
+    --muted-foreground: 160 50% 70%;
+
+    --accent: 160 84% 39%;
+    --accent-foreground: 218 54% 7%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 39% 18%;
+    --input: 220 39% 14%;
+    --ring: 160 84% 39%;
+    
+    --sidebar-background: 218 54% 4%;
+    --sidebar-foreground: 160 84% 39%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 218 54% 7%;
+    --sidebar-accent: 220 39% 12%;
+    --sidebar-accent-foreground: 160 84% 39%;
+    --sidebar-border: 220 39% 18%;
+    --sidebar-ring: 160 84% 39%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-dark-navy text-mint-glow;
+    background-image: 
+      radial-gradient(circle at 20% 80%, rgba(117, 211, 175, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(117, 211, 175, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, rgba(117, 211, 175, 0.05) 0%, transparent 50%);
+    /* Previne zoom em inputs no iOS */
+    -webkit-text-size-adjust: 100%;
+    /* Melhora o scroll no mobile */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Melhora o comportamento de toque em dispositivos móveis */
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Previne zoom em inputs no iOS */
+  input, select, textarea {
+    font-size: 16px;
+  }
+
+  @media (max-width: 640px) {
+    input, select, textarea {
+      font-size: 16px;
+    }
+  }
+}
+
+/* Efeitos de luz desfocados */
+.glow-effect {
+  position: relative;
+}
+
+.glow-effect::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(117, 211, 175, 0.15) 0%, transparent 70%);
+  filter: blur(40px);
+  z-index: -1;
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Animações customizadas */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Animação de remoção */
+@keyframes fade-out-scale {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.8) translateY(-10px);
+  }
+}
+
+.animate-fade-out-scale {
+  animation: fade-out-scale 0.5s ease-out forwards;
+}
+
+/* Delay para animações */
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}
+
+/* Animação de bounce customizada */
+@keyframes custom-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Sombras sutis */
+.shadow-soft {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.3), 
+    0 2px 4px -1px rgba(0, 0, 0, 0.2);
+}
+
+/* Efeitos para cards */
+.card-clean {
+  background: rgba(5, 11, 21, 0.9);
+  border: 1px solid rgba(117, 211, 175, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.card-clean:hover {
+  border-color: rgba(117, 211, 175, 0.4);
+}
+
+/* Efeito shine para cards de estatísticas */
+.card-stats {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.card-stats::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(117, 211, 175, 0.1), transparent);
+  transition: transform 0.6s;
+  transform: translateX(-100%) translateY(-100%) rotate(45deg);
+}
+
+.card-stats::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(117, 211, 175, 0.05) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.card-stats:hover::before {
+  transform: translateX(100%) translateY(100%) rotate(45deg);
+}
+
+.card-stats:hover::after {
+  opacity: 1;
+}
+
+.card-stats:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.4),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2),
+    0 0 20px rgba(117, 211, 175, 0.1);
+}
+
+/* Garante que o conteúdo dos cards fique acima dos efeitos */
+.card-stats > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Botão de nova instância com efeito especial */
+.btn-new-instance {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #75d3af 0%, #4ade80 100%);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.btn-new-instance::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-new-instance:hover {
+  transform: translateY(-1px);
+  box-shadow: 
+    0 10px 20px rgba(117, 211, 175, 0.3),
+    0 6px 6px rgba(117, 211, 175, 0.2);
+}
+
+.btn-new-instance:hover::before {
+  left: 100%;
+}
+
+/* Botão destrutivo */
+.btn-destructive {
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: rgb(239, 68, 68);
+  transition: all 0.3s ease;
+}
+
+.btn-destructive::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.btn-destructive:hover {
+  border-color: rgb(239, 68, 68);
+  background: rgba(239, 68, 68, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 
+    0 8px 16px rgba(239, 68, 68, 0.2),
+    0 4px 4px rgba(239, 68, 68, 0.1);
+}
+
+.btn-destructive:hover::before {
+  left: 100%;
+}
+
+/* Input escuro customizado */
+.input-dark {
+  background: rgba(5, 11, 21, 0.8);
+  border: 1px solid rgba(117, 211, 175, 0.3);
+  color: #75d3af;
+}
+
+.input-dark:focus {
+  border-color: #75d3af;
+  box-shadow: 0 0 0 3px rgba(117, 211, 175, 0.1);
+}
+
+/* Melhorias para dispositivos móveis */
+@media (max-width: 640px) {
+  .card-stats:hover {
+    transform: none;
+  }
+  
+  .btn-new-instance:hover,
+  .btn-destructive:hover {
+    transform: none;
+  }
+  
+  /* Melhora o espaçamento em telas pequenas */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* Scrollbar customizada */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(117, 211, 175, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(117, 211, 175, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(117, 211, 175, 0.5);
+}
