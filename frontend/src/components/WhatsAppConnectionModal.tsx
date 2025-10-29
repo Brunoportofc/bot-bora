@@ -146,7 +146,7 @@ const WhatsAppConnectionModal = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogPortal>
-        <DialogOverlay className="fixed inset-0 z-50 bg-dark-navy-950/95 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogOverlay className="fixed inset-0 z-50 backdrop-blur-md bg-transparent data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogContent className="w-[95vw] max-w-md sm:max-w-md bg-dark-navy-950 border border-mint-glow/30 backdrop-blur-lg shadow-2xl mx-auto">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6">
             <DialogTitle className="text-center text-lg sm:text-xl font-bold bg-gradient-to-r from-mint-glow to-secondary bg-clip-text text-transparent">

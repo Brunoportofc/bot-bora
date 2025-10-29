@@ -97,23 +97,7 @@ const AgentConfigModal = ({
 
   const handleSave = async () => {
     // Validações
-    if (!apiKey.trim()) {
-      toast({
-        title: "API Key obrigatória",
-        description: "Por favor, informe a API Key.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (aiProvider === 'openai' && !assistantId.trim()) {
-      toast({
-        title: "Assistant ID obrigatório",
-        description: "Para OpenAI, o Assistant ID é obrigatório.",
-        variant: "destructive",
-      });
-      return;
-    }
+    
 
     setIsSaving(true);
     try {
@@ -162,7 +146,7 @@ const AgentConfigModal = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogPortal>
-        <DialogOverlay className="fixed inset-0 z-50 bg-dark-navy-950/95 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogOverlay className="fixed inset-0 z-50 backdrop-blur-md bg-transparent data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto bg-dark-navy-950 border border-mint-glow/30 backdrop-blur-lg shadow-2xl mx-auto">
           <DialogHeader className="px-6 pt-6 space-y-2">
             <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-mint-glow via-secondary to-primary bg-clip-text text-transparent flex items-center gap-2">
@@ -176,107 +160,18 @@ const AgentConfigModal = ({
 
           <div className="px-6 pb-6 space-y-6">
             {/* Tabs de Provedor */}
-            <Tabs value={aiProvider} onValueChange={(v) => setAiProvider(v as 'gemini' | 'openai')} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-dark-navy-900/50">
+            <Tabs value={aiProvider} onValueChange={(v) => setAiProvider(v as 'gemini' )} className="w-full ">
+              <TabsList className=" items-center justify-center w-full grid-cols-2 bg-dark-navy-900/50">
                 <TabsTrigger value="gemini" className="data-[state=active]:bg-mint-glow/20 data-[state=active]:text-mint-glow">
                   <Sparkles className="w-4 h-4 mr-2" />
                   Google Gemini
                 </TabsTrigger>
-                <TabsTrigger value="openai" className="data-[state=active]:bg-mint-glow/20 data-[state=active]:text-mint-glow">
-                  <Bot className="w-4 h-4 mr-2" />
-                  OpenAI
-                </TabsTrigger>
+               
               </TabsList>
 
               {/* Configurações Gemini */}
-              <TabsContent value="gemini" className="space-y-4 mt-4">
-                {/* API Key */}
-                <div className="space-y-2">
-                  <Label htmlFor="gemini-api-key" className="text-mint-glow flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    Gemini API Key
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="gemini-api-key"
-                      type={showApiKey ? "text" : "password"}
-                      placeholder="AIza..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="pr-10 bg-[#0a0e1a] border-mint-glow/30 focus:border-mint-glow text-mint-glow placeholder:text-mint-glow/40"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? (
-                        <EyeOff className="w-4 h-4 text-mint-glow/60" />
-                      ) : (
-                        <Eye className="w-4 h-4 text-mint-glow/60" />
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-mint-glow/50">
-                    Obtenha gratuitamente em{' '}
-                    <a 
-                      href="https://aistudio.google.com/app/apikey" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-mint-glow hover:underline"
-                    >
-                      Google AI Studio
-                    </a>
-                  </p>
-                </div>
-
-                {/* Modelo Gemini */}
-                <div className="space-y-2">
-                  <Label htmlFor="gemini-model" className="text-mint-glow">Modelo Gemini</Label>
-                  <Select value={model} onValueChange={setModel}>
-                    <SelectTrigger className="bg-dark-navy-900 border-mint-glow/30 text-mint-glow">
-                      <SelectValue placeholder="Selecione o modelo" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-dark-navy-900 border-mint-glow/30">
-                      {GEMINI_MODELS.map((m) => (
-                        <SelectItem key={m.value} value={m.value} className="text-mint-glow hover:bg-mint-glow/10">
-                          <div>
-                            <div className="font-medium">{m.label}</div>
-                            <div className="text-xs text-mint-glow/60">{m.description}</div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Temperatura */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="temperature" className="text-mint-glow flex items-center gap-2">
-                      <Thermometer className="w-4 h-4" />
-                      Temperatura: {temperature.toFixed(1)}
-                    </Label>
-                    <span className="text-xs text-mint-glow/60">
-                      {temperature < 0.7 ? 'Preciso' : temperature < 1.3 ? 'Balanceado' : 'Criativo'}
-                    </span>
-                  </div>
-                  <Slider
-                    id="temperature"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={[temperature]}
-                    onValueChange={([value]) => setTemperature(value)}
-                    className="py-2"
-                  />
-                  <p className="text-xs text-mint-glow/50">
-                    Controla a criatividade das respostas. Valores baixos são mais precisos, altos são mais criativos.
-                  </p>
-                </div>
-
+              <TabsContent value="gemini" className="space-y-4 mt-4">              
+                              
                 {/* Prompt do Sistema */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -358,82 +253,7 @@ const AgentConfigModal = ({
                 </div>
               </TabsContent>
 
-              {/* Configurações OpenAI */}
-              <TabsContent value="openai" className="space-y-4 mt-4">
-                {/* OpenAI API Key */}
-                <div className="space-y-2">
-                  <Label htmlFor="openai-api-key" className="text-mint-glow flex items-center gap-2">
-                    <Bot className="w-4 h-4" />
-                    OpenAI API Key
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="openai-api-key"
-                      type={showApiKey ? "text" : "password"}
-                      placeholder="sk-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="pr-10 bg-dark-navy-900 border-mint-glow/30 focus:border-mint-glow text-mint-glow placeholder:text-mint-glow/40"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? (
-                        <EyeOff className="w-4 h-4 text-mint-glow/60" />
-                      ) : (
-                        <Eye className="w-4 h-4 text-mint-glow/60" />
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-mint-glow/50">
-                    Obtenha em{' '}
-                    <a 
-                      href="https://platform.openai.com/api-keys" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-mint-glow hover:underline"
-                    >
-                      platform.openai.com
-                    </a>
-                  </p>
-                </div>
-
-                {/* Assistant ID */}
-                <div className="space-y-2">
-                  <Label htmlFor="assistant-id" className="text-mint-glow flex items-center gap-2">
-                    <Bot className="w-4 h-4" />
-                    Assistant ID
-                  </Label>
-                  <Input
-                    id="assistant-id"
-                    placeholder="asst_..."
-                    value={assistantId}
-                    onChange={(e) => setAssistantId(e.target.value)}
-                    className="bg-dark-navy-900 border-mint-glow/30 focus:border-mint-glow text-mint-glow placeholder:text-mint-glow/40"
-                  />
-                  <p className="text-xs text-mint-glow/50">
-                    Crie seu assistente em{' '}
-                    <a 
-                      href="https://platform.openai.com/assistants" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-mint-glow hover:underline"
-                    >
-                      platform.openai.com/assistants
-                    </a>
-                  </p>
-                </div>
-
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <p className="text-sm text-yellow-400">
-                    <strong>Nota:</strong> Com OpenAI, o prompt do sistema e configurações devem ser definidas no Assistant criado na plataforma OpenAI.
-                  </p>
-                </div>
-              </TabsContent>
+              
             </Tabs>
 
             {/* Botões de Ação */}
