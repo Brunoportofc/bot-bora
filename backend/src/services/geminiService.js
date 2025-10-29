@@ -20,7 +20,7 @@ export async function processMessageWithGemini(messageText, phoneNumber, apiKey,
     console.log("enviando para gemini", messageText);
     // Configuração do modelo
     const model = genAI.getGenerativeModel({ 
-      model: modelName,
+      model: "gemini-2.0-flash",
       generationConfig: {
         temperature: temperature,
         topP: 0.95,
@@ -49,17 +49,39 @@ export async function processMessageWithGemini(messageText, phoneNumber, apiKey,
     logger.info(`Mensagem (${messageText.length} caracteres):`, messageText);
     logger.info('==========================================');
     
-    // Enviar mensagem
-    const result = await chat.sendMessage(messageText);
-    const response = result.response.text();
-    
-    logger.info('===== RESPOSTA RECEBIDA DO GEMINI =====');
-    logger.info(`Telefone: ${phoneNumber}`);
-    logger.info(`Resposta (${response.length} caracteres):`, response);
-    logger.info('========================================');
-    
-    return response;
-
+    try {
+      const result = await chat.sendMessage(messageText);
+      const response = result.response;
+  
+      // VERIFICAÇÃO DE SEGURANÇA: Checa se a resposta tem conteúdo válido
+      if (response.candidates && response.candidates.length > 0 && response.candidates[0].content) {
+        const responseText = response.text(); // Agora é seguro chamar .text()
+        
+        logger.info('===== RESPOSTA VÁLIDA RECEBIDA DO GEMINI =====');
+        logger.info(`Telefone: ${phoneNumber}`);
+        logger.info(`Resposta (${responseText.length} caracteres): ${responseText}`);
+        logger.info('========================================');
+        
+        return responseText;
+  
+      } else {
+        // A API respondeu, mas bloqueou a resposta ou não gerou conteúdo.
+        const finishReason = response.candidates?.[0]?.finishReason || 'Desconhecido';
+        logger.warn('===== RESPOSTA DO GEMINI SEM CONTEÚDO =====');
+        logger.warn(`Telefone: ${phoneNumber}`);
+        logger.warn(`Motivo do término: ${finishReason}`);
+        logger.warn('Resposta completa para depuração:', JSON.stringify(response, null, 2));
+        logger.warn('=========================================');
+  
+        // Retorne uma mensagem padrão para o usuário final
+        return "Desculpe, não consegui processar sua mensagem. Por favor, tente reformulá-la.";
+      }
+    } catch (error) {
+      // Registrar como WARN: a chamada ao Gemini falhou, mas retornamos uma mensagem de fallback
+      // para que a conversa do usuário continue (evita crash no pipeline).
+      logger.warn('Erro ao processar mensagem com Gemini (retornando fallback):', error);
+      return 'Desculpe, estou com dificuldades para processar sua mensagem no momento. Tente novamente em instantes.';
+    }
   } catch (error) {
     logger.error('❌ ERRO COMPLETO AO PROCESSAR COM GEMINI:');
     logger.error('==============================================');

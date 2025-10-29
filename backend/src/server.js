@@ -216,21 +216,37 @@ app.use((req, res) => {
 // Iniciar servidor
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
-  console.log('='.repeat(60));
-  console.log('');
-  console.log('   WhatsApp AI Backend Server');
-  console.log('');
-  console.log(`   Servidor rodando em: http://localhost:${PORT}`);
-  console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+// Start server after attempting to restore sessions from disk
+async function startServer() {
+  try {
+    // Tentar restaurar sessões persistidas (se houver)
+    if (typeof whatsappService.restoreSessions === 'function') {
+      logger.info('Chamando restoreSessions para restaurar sessões salvas...');
+      const result = await whatsappService.restoreSessions();
+      logger.info('Resultado da restauração de sessões:', result);
+    }
+  } catch (err) {
+    logger.error('Erro ao restaurar sessões na inicialização:', err);
+  }
 
-  console.log('   Socket.io: Ativo');
-  console.log('   CORS: Vercel habilitado (.vercel.app)');
-  console.log('');
-  console.log('   Pronto para receber conexoes WhatsApp!');
-  console.log('');
-  console.log('='.repeat(60));
-});
+  httpServer.listen(PORT, () => {
+    console.log('='.repeat(60));
+    console.log('');
+    console.log('   WhatsApp AI Backend Server');
+    console.log('');
+    console.log(`   Servidor rodando em: http://localhost:${PORT}`);
+    console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+
+    console.log('   Socket.io: Ativo');
+    console.log('   CORS: Vercel habilitado (.vercel.app)');
+    console.log('');
+    console.log('   Pronto para receber conexoes WhatsApp!');
+    console.log('');
+    console.log('='.repeat(60));
+  });
+}
+
+startServer();
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
@@ -240,7 +256,8 @@ process.on('SIGINT', async () => {
   const sessions = whatsappService.getAllSessions();
   for (const session of sessions) {
     try {
-      await whatsappService.logout(session.sessionId);
+      // Durante shutdown não remover arquivos de sessão — preserva credenciais para restore
+      await whatsappService.logout(session.sessionId, { removeFiles: false });
     } catch (error) {
       logger.error(`Erro ao fechar sessão ${session.sessionId}:`, error);
     }

@@ -31,7 +31,10 @@ import {
 
 const sessions = new Map();
 const sessionConfigs = new Map();
+const pendingSends = new Map(); // sessionId -> [{ jid, payload, def, created }]
 const SESSIONS_PATH = process.env.SESSIONS_PATH || './sessions';
+// Novo: bloqueio para criações de sessão em andamento (evita remoção concorrente de arquivos)
+const activeSessionCreations = new Set();
 
 // Buffer de mensagens por usuário (para agrupar mensagens antes de enviar ao Gemini)
 const messageBuffers = new Map(); // { phoneNumber: { messages: [], timer: timeoutId } }
@@ -47,81 +50,338 @@ class WhatsAppService {
     this.io = io;
   }
 
-  async createSession(sessionId) {
+  async createSession(sessionId, options = {}) {
+    logger.info(`createSession: iniciando criação/restauração da sessão ${sessionId}`);
     if (sessions.has(sessionId)) {
-      logger.info(`Sessão ${sessionId} já existe`);
-      return sessions.get(sessionId);
+      const existing = sessions.get(sessionId);
+      // Se o socket existente não estiver aberto, remover e recriar
+      try {
+        if (this.isSocketOpen(existing.socket)) {
+          logger.info(`Sessão ${sessionId} já existe e socket está aberto`);
+          return sessions.get(sessionId);
+        } else {
+          logger.warn(`Sessão ${sessionId} existe mas socket NÃO está aberto — recriando`);
+          try { existing.socket.ws?.close(); existing.socket.end?.(); } catch(e){}
+          sessions.delete(sessionId);
+        }
+      } catch (e) {
+        logger.warn(`Erro ao verificar estado do socket existente para ${sessionId}: ${e?.message || e}`);
+        sessions.delete(sessionId);
+      }
     }
 
-    const sessionPath = path.join(SESSIONS_PATH, sessionId);
-    
-    // Criar diretório da sessão se não existir
-    if (!fs.existsSync(sessionPath)) {
-      fs.mkdirSync(sessionPath, { recursive: true });
+    // Marcar que estamos criando/recriando esta sessão (evita que outro handler apague a pasta)
+    activeSessionCreations.add(sessionId);
+
+    try {
+      const sessionPath = path.join(SESSIONS_PATH, sessionId);
+
+      // If forceNewAuth is requested, ensure the session folder is removed so
+      // Baileys will start without existing credentials and will emit a QR.
+      if (options.forceNewAuth) {
+        try {
+          if (fs.existsSync(sessionPath)) {
+            logger.info(`createSession: forceNewAuth=true — removendo pasta existente ${sessionPath}`);
+            fs.rmSync(sessionPath, { recursive: true, force: true });
+          }
+        } catch (err) {
+          logger.error(`createSession: falha ao remover pasta de sessão para forceNewAuth: ${err?.message || err}`);
+        }
+      }
+
+      // Criar diretório da sessão se não existir
+      if (!fs.existsSync(sessionPath)) {
+        fs.mkdirSync(sessionPath, { recursive: true });
+      }
+      try {
+        const files = fs.existsSync(sessionPath) ? fs.readdirSync(sessionPath) : [];
+        logger.info(`createSession: contents of ${sessionPath}: ${files.length} files -> ${files.join(', ')}`);
+      } catch (listErr) {
+        logger.warn(`createSession: falha ao listar conteúdo de ${sessionPath}: ${listErr?.message || listErr}`);
+      }
+      console.log(`createSession: auth state será carregado de ${sessionPath}`);
+      let state, saveCreds;
+      const MAX_AUTH_RETRIES = 5;
+      for (let attempt = 0; attempt < MAX_AUTH_RETRIES; attempt++) {
+        try {
+          // Garantir que a pasta exista antes de pedir ao Baileys para usá-la
+          if (!fs.existsSync(sessionPath)) {
+            fs.mkdirSync(sessionPath, { recursive: true });
+          }
+          const auth = await useMultiFileAuthState(sessionPath);
+          state = auth.state;
+          saveCreds = auth.saveCreds;
+
+      // Wrap saveCreds to be resilient to concurrent deletions/renames of the session folder.
+      // If write fails with ENOENT, recreate the folder and retry a few times.
+      const saveCredsSafe = async (data) => {
+        const MAX_SAVE_RETRIES = 4;
+        for (let attempt = 0; attempt < MAX_SAVE_RETRIES; attempt++) {
+          try {
+            // Ensure directory exists before delegating to Baileys' saveCreds
+            if (!fs.existsSync(sessionPath)) {
+              fs.mkdirSync(sessionPath, { recursive: true });
+            }
+            await saveCreds(data);
+            return;
+          } catch (err) {
+            const isENOENT = err && (err.code === 'ENOENT' || (err.message && err.message.includes('ENOENT')));
+            logger.warn(`saveCredsSafe: tentativa ${attempt + 1}/${MAX_SAVE_RETRIES} falhou para ${sessionPath}: ${err?.message || err}`);
+            if (isENOENT) {
+              try {
+                fs.mkdirSync(sessionPath, { recursive: true });
+                logger.warn(`saveCredsSafe: diretório recriado ${sessionPath} após ENOENT`);
+              } catch (mkErr) {
+                logger.error(`saveCredsSafe: falha ao recriar diretório ${sessionPath}:`, mkErr);
+              }
+              // backoff
+              await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+              continue;
+            }
+
+            // Non-ENOENT -> log and rethrow
+            logger.error('saveCredsSafe: erro não recuperável ao salvar credenciais:', err);
+            throw err;
+          }
+        }
+
+        logger.error(`saveCredsSafe: não foi possível salvar credenciais em ${sessionPath} após múltiplas tentativas`);
+      };
+          logger.info(`createSession: auth state carregado (creds keys: ${Object.keys(state.creds || {}).length})`);
+          try {
+            const postFiles = fs.existsSync(sessionPath) ? fs.readdirSync(sessionPath) : [];
+            logger.info(`createSession: após load auth, conteúdo de ${sessionPath}: ${postFiles.length} files -> ${postFiles.join(', ')}`);
+          } catch (listErr2) {
+            logger.warn(`createSession: falha ao listar conteúdo após auth load ${sessionPath}: ${listErr2?.message || listErr2}`);
+          }
+          break;
+        } catch (err) {
+          // Se for ENOENT, tentar recriar a pasta e re-tentar após pequeno delay
+          const isENOENT = err && (err.code === 'ENOENT' || (err.message && err.message.includes('ENOENT')));
+          logger.warn(`createSession: falha ao carregar auth state (attempt ${attempt + 1}/${MAX_AUTH_RETRIES}): ${err?.message || err}`);
+          if (isENOENT) {
+            try {
+              fs.mkdirSync(sessionPath, { recursive: true });
+              logger.warn(`createSession: diretório recriado ${sessionPath} após ENOENT`);
+            } catch (mkErr) {
+              logger.error(`createSession: falha ao recriar diretório ${sessionPath}:`, mkErr);
+            }
+            // aguardar um pouco antes da próxima tentativa
+            await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+            continue;
+          }
+
+          // Para outros erros, re-throw após log
+          logger.error('createSession: erro fatal ao carregar auth state:', err);
+          throw err;
+        }
+      }
+      if (!state || !saveCreds) {
+        throw new Error('Não foi possível carregar auth state após múltiplas tentativas');
+      }
+
+      const { version } = await fetchLatestBaileysVersion();
+      logger.info(`createSession: versão do Baileys obtida: ${JSON.stringify(version)}`);
+
+      const socket = makeWASocket({
+        version,
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
+        },
+        printQRInTerminal: false,
+        logger: baileysLogger,
+        browser: ['Chrome (Linux)', '', ''],
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        defaultQueryTimeoutMs: 60000,
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 10000,
+        getMessage: async (key) => {
+          // Implementação básica do getMessage conforme documentação
+          return { conversation: 'Mensagem não encontrada' };
+        },
+        shouldSyncHistoryMessage: () => false, // Desabilitar sync de histórico por enquanto
+      });
+
+      sessions.set(sessionId, { socket });
+      logger.info(`createSession: socket instanciado e entry adicionada em memória para ${sessionId}. ws.readyState=${socket?.ws?.readyState}`);
+
+      // Event handlers
+      // Use safe wrapper to persist creds to disk (handles concurrent file/dir ops)
+      try {
+        if (typeof saveCredsSafe === 'function') {
+          socket.ev.on('creds.update', saveCredsSafe);
+          logger.info(`createSession: registrado saveCredsSafe para creds.update em ${sessionId}`);
+        } else if (typeof saveCreds === 'function') {
+          socket.ev.on('creds.update', saveCreds);
+          logger.info(`createSession: registrado saveCreds (fallback) para creds.update em ${sessionId}`);
+        } else {
+          logger.warn(`createSession: nenhum handler de saveCreds disponível para ${sessionId}`);
+        }
+      } catch (evErr) {
+        logger.error(`createSession: falha ao registrar handler de creds.update para ${sessionId}: ${evErr?.message || evErr}`);
+      }
+
+      try {
+        socket.ev.on('connection.update', async (update) => {
+          await this.handleConnectionUpdate(sessionId, update);
+        });
+        socket.ev.on('messages.upsert', async ({ messages }) => {
+          await this.handleIncomingMessages(sessionId, messages);
+        });
+        logger.info(`createSession: handlers connection.update e messages.upsert registrados para ${sessionId}`);
+      } catch (evErr2) {
+        logger.error(`createSession: falha ao registrar connection/messages handlers para ${sessionId}: ${evErr2?.message || evErr2}`);
+      }
+
+      // Aguarda até que o socket emita conexão 'open' e até que o usuário (credenciais) esteja disponível, com timeout
+      try {
+        logger.info(`createSession: aguardando evento connection.open para sessão ${sessionId} (timeout 20s)`);
+        const waitForOpen = (ms = 20000) => new Promise((resolve) => {
+          let settled = false;
+          const onUpdate = (update) => {
+            try {
+              if (update?.connection === 'open') {
+                if (!settled) {
+                  settled = true;
+                  resolve(true);
+                }
+              }
+              // If connection closed with loggedOut, resolve false
+              if (update?.connection === 'close') {
+                const shouldReconnect = update?.lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                if (!shouldReconnect && !settled) {
+                  settled = true;
+                  resolve(false);
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
+          };
+
+          socket.ev.on('connection.update', onUpdate);
+
+          // timeout
+          setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              socket.ev.removeListener?.('connection.update', onUpdate);
+              resolve(false);
+            }
+          }, ms);
+        });
+
+        const opened = await waitForOpen(20000);
+        if (opened) {
+          // aguardar até que socket.user esteja disponível (credenciais carregadas)
+          const maxUserWait = 10000;
+          const pollInterval = 200;
+          let waited = 0;
+          while (!socket.user && waited < maxUserWait) {
+            await new Promise(r => setTimeout(r, pollInterval));
+            waited += pollInterval;
+          }
+
+          if (socket.user) {
+            logger.info(`createSession: socket.open e socket.user disponível para ${sessionId}`);
+          } else {
+            logger.warn(`createSession: socket.open mas socket.user NÃO disponível para ${sessionId} após ${maxUserWait}ms`);
+          }
+        } else {
+          logger.warn(`createSession: Timeout aguardando abertura do socket para sessão ${sessionId} — retornando, socket pode não estar pronto`);
+        }
+      } catch (e) {
+        logger.warn(`createSession: Erro ao aguardar conexão open para ${sessionId}: ${e?.message || e}`);
+      }
+
+      logger.info(`Sessao ${sessionId} criada com sucesso`);
+      return { socket };
+    } finally {
+      // Garantir que o lock seja removido mesmo em erro (evita bloquear deleções futuras)
+      activeSessionCreations.delete(sessionId);
     }
-
-    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-    const { version } = await fetchLatestBaileysVersion();
-
-    const socket = makeWASocket({
-      version,
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
-      },
-      printQRInTerminal: false,
-      logger: baileysLogger,
-      browser: ['Chrome (Linux)', '', ''],
-      syncFullHistory: false,
-      markOnlineOnConnect: false,
-      defaultQueryTimeoutMs: 60000,
-      connectTimeoutMs: 60000,
-      keepAliveIntervalMs: 10000,
-      getMessage: async (key) => {
-        // Implementação básica do getMessage conforme documentação
-        return { conversation: 'Mensagem não encontrada' };
-      },
-      shouldSyncHistoryMessage: () => false, // Desabilitar sync de histórico por enquanto
-    });
-
-    sessions.set(sessionId, { socket });
-
-    // Event handlers
-    socket.ev.on('creds.update', saveCreds);
-
-    socket.ev.on('connection.update', async (update) => {
-      await this.handleConnectionUpdate(sessionId, update);
-    });
-
-    socket.ev.on('messages.upsert', async ({ messages }) => {
-      await this.handleIncomingMessages(sessionId, messages);
-    });
-
-    logger.info(`Sessao ${sessionId} criada com sucesso`);
-    return { socket };
   }
 
   async handleConnectionUpdate(sessionId, update) {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      // Emit raw QR payload for debugging (frontend/admin can inspect)
       try {
-        const qrDataURL = await QRCode.toDataURL(qr);
-        this.io.emit('qr', { sessionId, qr: qrDataURL });
-        logger.info(`QR Code gerado para sessão ${sessionId}`);
+        this.io.emit('qr-raw', { sessionId, qrPayload: qr });
+      } catch (e) {
+        logger.warn(`Falha ao emitir qr-raw para ${sessionId}: ${e?.message || e}`);
+      }
+
+      try {
+        // Normalize QR payload to a string when possible
+        let qrString;
+        if (typeof qr === 'string') {
+          qrString = qr;
+        } else if (Buffer.isBuffer(qr)) {
+          qrString = qr.toString('utf8');
+        } else if (qr && typeof qr === 'object' && typeof qr.code === 'string') {
+          // Em alguns casos o payload pode ser um objeto com campo 'code' ou similar
+          qrString = qr.code;
+        } else if (qr && typeof qr === 'object' && typeof qr.qr === 'string') {
+          qrString = qr.qr;
+        } else {
+          try { qrString = JSON.stringify(qr); } catch(e) { qrString = String(qr); }
+        }
+
+        logger.info(`handleConnectionUpdate: recebendo qr (type=${typeof qr}, normalizedLength=${qrString ? qrString.length : 0}) para ${sessionId}`);
+
+        // Tentar gerar DataURL a partir da string normalizada
+        let qrDataURL;
+        try {
+          qrDataURL = await QRCode.toDataURL(qrString);
+        } catch (innerErr) {
+          logger.warn(`QRCode.toDataURL falhou com normalized string — tentando fallback (session ${sessionId}): ${innerErr?.message || innerErr}`);
+          // Fallback: tentar usar a string bruta (não JSONified)
+          try {
+            qrDataURL = await QRCode.toDataURL(String(qr));
+          } catch (fallbackErr) {
+            // Se tudo falhar, log completo e emitir erro
+            logger.error(`Erro ao gerar QR Code (fallback falhou) para ${sessionId}:`, { message: fallbackErr?.message || String(fallbackErr), stack: fallbackErr?.stack, qrPayload: qr });
+            this.io.emit('qr-error', { sessionId, error: fallbackErr?.message || String(fallbackErr) });
+            return;
+          }
+        }
+
+        // Se obtivemos um DataURL válido, emitir para frontend
+        if (qrDataURL) {
+          this.io.emit('qr', { sessionId, qr: qrDataURL });
+          logger.info(`QR Code gerado para sessão ${sessionId}`);
+        } else {
+          logger.warn(`QRCode.toDataURL retornou vazio para ${sessionId}; emitindo qr-raw para diagnóstico`);
+          this.io.emit('qr-error', { sessionId, error: 'QRCode.toDataURL retornou vazio', qrPayload: qr });
+        }
       } catch (error) {
-        logger.error(`Erro ao gerar QR Code para ${sessionId}:`, error);
-        this.io.emit('qr-error', { sessionId, error: error.message });
+        // Log mais completo para depuração (inclui stack e payload do qr)
+        logger.error(`Erro ao processar payload de QR para ${sessionId}:`, { message: error?.message || String(error), stack: error?.stack, qrPayload: qr });
+        this.io.emit('qr-error', { sessionId, error: error?.message || String(error) });
       }
     }
 
     if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      
-      logger.info(`Conexão fechada para ${sessionId}. Status: ${statusCode}, Reconectar: ${shouldReconnect}`);
+      // Log completo do lastDisconnect para diagnóstico
+      logger.warn(`connection.update close para ${sessionId} — lastDisconnect: ${JSON.stringify(lastDisconnect)}`);
 
-      // Limpar sessão atual
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const payloadMessage = lastDisconnect?.error?.output?.payload?.message;
+
+      // Tratar alguns códigos/erros como irreparáveis para evitar loop de reconexão
+      const unrecoverableStatusCodes = [440, 428, 401];
+      const isUnrecoverableCode = unrecoverableStatusCodes.includes(Number(statusCode));
+      const isLoggedOutFlag = statusCode === DisconnectReason.loggedOut || payloadMessage === 'loggedOut' || payloadMessage === 'Invalid session';
+
+      const shouldReconnect = !(isUnrecoverableCode || isLoggedOutFlag);
+
+      logger.info(`Conexão fechada para ${sessionId}. statusCode=${statusCode} payloadMessage=${payloadMessage} shouldReconnect=${shouldReconnect}`);
+
+      // Limpar sessão atual em memória
       sessions.delete(sessionId);
 
       if (shouldReconnect) {
@@ -129,7 +389,7 @@ class WhatsAppService {
         if (statusCode !== DisconnectReason.timedOut && statusCode !== DisconnectReason.connectionLost) {
           this.io.emit('disconnected', { sessionId, shouldReconnect: true });
         }
-        
+
         // Aguardar antes de reconectar para evitar spam
         setTimeout(async () => {
           try {
@@ -137,23 +397,16 @@ class WhatsAppService {
             await this.createSession(sessionId);
           } catch (error) {
             logger.error(`Erro ao reconectar ${sessionId}:`, error);
-            this.io.emit('connection-error', { sessionId, error: error.message });
+            this.io.emit('connection-error', { sessionId, error: error?.message || String(error) });
           }
-        }, 3000);
+        }, 2000);
       } else {
+        // Marca como logged-out, mas PRESERVA os arquivos de sessão para permitir
+        // restauração manual ou análise. Apenas um logout explícito pelo usuário
+        // (via endpoint ou socket) removerá os arquivos.
         sessionConfigs.delete(sessionId);
         this.io.emit('logged-out', { sessionId });
-        
-        // Limpar arquivos de sessão se logout
-        const sessionPath = path.join(SESSIONS_PATH, sessionId);
-        if (fs.existsSync(sessionPath)) {
-          try {
-            fs.rmSync(sessionPath, { recursive: true, force: true });
-            logger.info(`Arquivos de sessão ${sessionId} removidos`);
-          } catch (error) {
-            logger.error(`Erro ao remover arquivos de sessão ${sessionId}:`, error);
-          }
-        }
+        logger.warn(`Sessão ${sessionId} considerada logged-out; arquivos preservados. Use o endpoint/logout para remover se desejar.`);
       }
     } else if (connection === 'open') {
       logger.info(`Conexão estabelecida para ${sessionId}`);
@@ -161,14 +414,23 @@ class WhatsAppService {
       const session = sessions.get(sessionId);
       if (session?.socket) {
         const user = session.socket.user;
-        this.io.emit('connected', { 
-          sessionId,
-          user: {
-            id: user.id,
-            name: user.name,
-            phoneNumber: user.id.split(':')[0]
+        logger.info(`connection.update open: session=${sessionId} user=${user ? user.id : 'null'} readyState=${session.socket?.ws?.readyState}`);
+        if (user) {
+          this.io.emit('connected', { 
+            sessionId,
+            user: {
+              id: user.id,
+              name: user.name,
+              phoneNumber: user.id.split(':')[0]
+            }
+          });
+          // Flush any pending sends queued while socket was opening
+          try {
+            await this.flushPendingSends(sessionId);
+          } catch (err) {
+            logger.warn(`Erro ao enviar mensagens pendentes para ${sessionId}: ${err?.message || err}`);
           }
-        });
+        }
       }
     } else if (connection === 'connecting') {
       this.io.emit('connecting', { sessionId });
@@ -424,9 +686,7 @@ class WhatsAppService {
           } 
          
           if (aiResponse) {
-            await session.socket.sendMessage(message.key.remoteJid, {
-              text: aiResponse
-            });
+            await this.sendMessageSafe(sessionId, message.key.remoteJid, { text: aiResponse });
 
             logger.info(`Resposta AI enviada para ${message.key.remoteJid}`);
             
@@ -544,6 +804,125 @@ class WhatsAppService {
     return this.downloadMedia(socket, message, 'document');
   }
 
+  // Verifica se o socket do Baileys está aberto
+  isSocketOpen(socket) {
+    try {
+      // WebSocket readyState === 1 significa OPEN
+      const wsState = socket?.ws?.readyState;
+      // Considere socket pronto se o websocket estiver OPEN ou se socket.user já estiver preenchido
+      return (wsState === 1) || !!socket?.user;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Envia mensagem com tentativas e reconexão automática se necessário
+  async sendMessageSafe(sessionId, jid, messagePayload, opts = {}) {
+    const attempts = opts.attempts || 3;
+    const delayMs = opts.delayMs || 1000;
+    const tryReconnect = opts.tryReconnect !== false; // default true
+
+    const session = sessions.get(sessionId);
+    if (!session) throw new Error(`Sessão ${sessionId} não encontrada ao enviar mensagem`);
+
+    logger.info(`sendMessageSafe: iniciado para ${jid} na sessão ${sessionId} (attempts=${attempts}, delayMs=${delayMs})`);
+
+    // If socket is not open right now, queue the send and wait for flush (prevents race)
+    const socketNow = session.socket;
+    if (!this.isSocketOpen(socketNow)) {
+      logger.info(`sendMessageSafe: socket não aberto agora para ${sessionId}, enfileirando mensagem para envio quando abrir`);
+      const def = {};
+      def.promise = new Promise((resolve, reject) => { def.resolve = resolve; def.reject = reject; });
+      // Attach a noop catch handler immediately to avoid unhandledRejection if timeout occurs
+      def.promise.catch(() => {});
+      const entry = { jid, messagePayload, def, created: Date.now() };
+      const queue = pendingSends.get(sessionId) || [];
+      queue.push(entry);
+      pendingSends.set(sessionId, queue);
+
+      // Timeout for queued message
+      const queueTimeout = (opts.queueTimeoutMs) || 60000;
+      const timer = setTimeout(() => {
+        // Remove from queue if still there and reject
+        const q = pendingSends.get(sessionId) || [];
+        const idx = q.indexOf(entry);
+        if (idx !== -1) {
+          q.splice(idx, 1);
+          pendingSends.set(sessionId, q);
+          try {
+            def.reject(new Error('Timeout aguardando socket abrir para envio'));
+          } catch (e) {
+            logger.warn('flushPendingSends: falha ao rejeitar promise de fila:', e?.message || e);
+          }
+        }
+      }, queueTimeout);
+
+      // When resolved or rejected, clear timer
+      def.promise.finally(() => clearTimeout(timer));
+
+      return def.promise;
+    }
+
+    for (let i = 0; i < attempts; i++) {
+      const socket = session.socket;
+      logger.debug(`sendMessageSafe: tentativa ${i + 1}/${attempts} — socket.readyState=${socket?.ws?.readyState} ; socket.user=${!!socket?.user}`);
+      if (this.isSocketOpen(socket)) {
+        try {
+          return await socket.sendMessage(jid, messagePayload);
+        } catch (err) {
+          // Se falha por conexão, tentar outra vez
+          logger.warn(`Falha ao enviar mensagem (tentativa ${i + 1}/${attempts}) para ${jid}: ${err?.message || err}`);
+          logger.debug('sendMessageSafe: erro detalhado ao enviar:', { error: err, output: err?.output });
+          // Se for erro crítico de conexão, tentar reconectar
+          const isConnectionClosed = err && err.output && err.output.payload && err.output.payload.message === 'Connection Closed';
+          if (isConnectionClosed && tryReconnect) {
+            try {
+              logger.info(`sendMessageSafe: erro de conexão detectado ao enviar para ${sessionId}, tentando forceReconnect...`);
+              const fr = await this.forceReconnect(sessionId);
+              logger.info(`sendMessageSafe: forceReconnect resultado: ${JSON.stringify(fr)}`);
+              // aguardar um pouco para o socket abrir
+              await new Promise(r => setTimeout(r, delayMs));
+            } catch (reErr) {
+              logger.error(`Erro ao forçar reconexão para ${sessionId}:`, reErr?.message || reErr);
+            }
+          }
+        }
+      }
+
+      // Se socket não aberto, aguardar e tentar novamente
+      logger.debug(`sendMessageSafe: socket não aberto ou envio falhou, aguardando ${delayMs}ms antes da próxima tentativa`);
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+
+    // Após tentativas, se ainda não enviou, tentar recriar sessão e enviar uma última vez
+    if (tryReconnect) {
+      try {
+        logger.info(`Tentativa final: recriar sessão ${sessionId} antes de enviar mensagem para ${jid}`);
+        await this.createSession(sessionId);
+        const session2 = sessions.get(sessionId);
+        logger.info(`sendMessageSafe: createSession retornou, socket.readyState=${session2?.socket?.ws?.readyState}, socket.user=${!!session2?.socket?.user}`);
+        // Aguarda até o socket estar aberto (timeout 20s)
+  const maxWait = 20000;
+        const interval = 200;
+        let waited = 0;
+        while (!this.isSocketOpen(session2?.socket) && waited < maxWait) {
+          await new Promise(r => setTimeout(r, interval));
+          waited += interval;
+        }
+        logger.info(`sendMessageSafe: após espera final, socket.readyState=${session2?.socket?.readyState}, socket.user=${!!session2?.socket?.user}, waited=${waited}ms`);
+        if (this.isSocketOpen(session2?.socket)) {
+          return await session2.socket.sendMessage(jid, messagePayload);
+        } else {
+          logger.warn(`Socket ainda não aberto para ${sessionId} após recriar sessão (esperou ${waited}ms)`);
+        }
+      } catch (finalErr) {
+        logger.error(`Falha final ao enviar mensagem para ${jid}:`, finalErr?.message || finalErr);
+      }
+    }
+
+    throw new Error(`Não foi possível enviar mensagem para ${jid} na sessão ${sessionId}`);
+  }
+
   async generateQR(sessionId) {
     try {
       logger.info(`Gerando QR Code para sessão ${sessionId}`);
@@ -562,7 +941,7 @@ class WhatsAppService {
         sessions.delete(sessionId);
       }
 
-      // Limpar arquivos de sessão antigos
+      // Limpar arquivos da sessão antigos
       const sessionPath = path.join(SESSIONS_PATH, sessionId);
       if (fs.existsSync(sessionPath)) {
         try {
@@ -573,20 +952,50 @@ class WhatsAppService {
         }
       }
 
-      // Aguardar um pouco antes de criar nova sessão
-      await new Promise(resolve => setTimeout(resolve, 1000));
+  // Aguardar um pouco antes de criar nova sessão
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Criar nova sessão
-      await this.createSession(sessionId);
+  // Criar nova sessão forçando um auth limpo para obrigar geração de QR
+  await this.createSession(sessionId, { forceNewAuth: true });
       
       return { success: true, message: 'QR Code sendo gerado...' };
     } catch (error) {
-      logger.error(`Erro ao gerar QR para ${sessionId}:`, error.message);
-      return { success: false, error: error.message };
+      // Log completo para facilitar diagnóstico (mensagem, stack e objeto)
+      logger.error(`Erro ao gerar QR para ${sessionId}:`, { message: error?.message || String(error), stack: error?.stack, errorObj: error });
+      return { success: false, error: error?.message || String(error) };
     }
   }
 
-  async logout(sessionId) {
+  // Flush pending sends queued while socket was opening
+  async flushPendingSends(sessionId) {
+    const queue = pendingSends.get(sessionId) || [];
+    if (!queue || queue.length === 0) return;
+
+    logger.info(`flushPendingSends: enviando ${queue.length} mensagens pendentes para ${sessionId}`);
+
+    const session = sessions.get(sessionId);
+    if (!session?.socket || !this.isSocketOpen(session.socket)) {
+      logger.warn(`flushPendingSends: socket não está pronto para ${sessionId}, adiando flush`);
+      return;
+    }
+
+    // Send all queued messages sequentially
+    while (queue.length > 0) {
+      const item = queue.shift();
+      try {
+        logger.info(`flushPendingSends: enviando para ${item.jid} (session ${sessionId})`);
+        const res = await session.socket.sendMessage(item.jid, item.messagePayload);
+        item.def.resolve(res);
+      } catch (err) {
+        logger.error(`flushPendingSends: erro ao enviar para ${item.jid}: ${err?.message || err}`);
+        item.def.reject(err);
+      }
+    }
+
+    pendingSends.delete(sessionId);
+  }
+
+  async logout(sessionId, options = { removeFiles: true }) {
     try {
       const session = sessions.get(sessionId);
       
@@ -594,20 +1003,49 @@ class WhatsAppService {
         throw new Error('Sessão não encontrada');
       }
 
-      await session.socket.logout();
-      sessions.delete(sessionId);
-      sessionConfigs.delete(sessionId);
+      // Se for uma remoção completa (usuário) -> chamar logout do Baileys e remover arquivos
+      if (options.removeFiles !== false) {
+        // Tenta efetuar logout remoto (invalidate credentials)
+        try {
+          await session.socket.logout();
+        } catch (err) {
+          // Se logout falhar, tentamos apenas fechar a conexão
+          logger.warn(`Falha ao executar socket.logout() para ${sessionId}, fechando socket: ${err.message || err}`);
+          try { session.socket.ws?.close(); session.socket.end?.(); } catch(e){}
+        }
 
-      // Remover arquivos da sessão
-      const sessionPath = path.join(SESSIONS_PATH, sessionId);
-      if (fs.existsSync(sessionPath)) {
-        fs.rmSync(sessionPath, { recursive: true, force: true });
+        // Remover arquivos da sessão do disco
+        const sessionPath = path.join(SESSIONS_PATH, sessionId);
+        if (fs.existsSync(sessionPath)) {
+          try {
+            fs.rmSync(sessionPath, { recursive: true, force: true });
+          } catch (err) {
+            logger.error(`Erro ao remover arquivos da sessão ${sessionId}:`, err);
+          }
+        }
+        sessions.delete(sessionId);
+        sessionConfigs.delete(sessionId);
+
+        logger.info(`Sessão ${sessionId} desconectada e removida`);
+        this.io.emit('logged-out', { sessionId });
+
+        return { success: true, message: 'Desconectado com sucesso' };
       }
 
-      logger.info(`Sessão ${sessionId} desconectada e removida`);
-      this.io.emit('logged-out', { sessionId });
+      // Se removeFiles === false -> apenas fechar socket/localmente sem apagar credenciais
+      try {
+        session.socket.ws?.close();
+        session.socket.end?.();
+      } catch (err) {
+        logger.warn(`Erro ao fechar socket para ${sessionId}: ${err.message || err}`);
+      }
 
-      return { success: true, message: 'Desconectado com sucesso' };
+      sessions.delete(sessionId);
+
+      logger.info(`Sessão ${sessionId} desconectada (arquivos preservados)`);
+      this.io.emit('disconnected', { sessionId, reason: 'shutdown' });
+
+      return { success: true, message: 'Sessão fechada (arquivos preservadas)' };
     } catch (error) {
       logger.error(`Erro ao fazer logout de ${sessionId}:`, error);
       throw error;
@@ -760,7 +1198,9 @@ class WhatsAppService {
     // Concatenar todas as mensagens
     const combinedMessage = buffer.messages.join('\n\n');
     const messageCount = buffer.messages.length;
-    
+    console.log("messageCount", messageCount);
+    console.log("combinedMessage", combinedMessage);
+    console.log("ai entrar no try agr")
     logger.info(`🚀 Enviando ${messageCount} mensagem(ns) agrupada(s) para [${phoneNumber}]`);
     logger.info(`📝 Mensagem combinada (${combinedMessage.length} caracteres): "${combinedMessage.substring(0, 100)}..."`);
 
@@ -771,25 +1211,38 @@ class WhatsAppService {
       const useGemini = true;
 
       let aiResponse;
-      console.log("enviando para gemini", combinedMessage);
+     
 
       if (useGemini) {
+        console.log("useGemini true, enviando para gemini");
+        console.log("combinedMessage", combinedMessage);
+        console.log("phoneNumber", phoneNumber);
+        console.log("apiKey", apiKey);
+        
         aiResponse = await processMessageWithGemini(
           combinedMessage,
           phoneNumber,
           apiKey,
-          config.model || 'gemini-2.0-flash-exp',
-          config.systemPrompt || '',
-          config.temperature || 1.0
+          'gemini-2.0-flash',
+          '',
+          1.0
         );
       } 
-      console.log(aiResponse);
+      console.log("aiResponse", aiResponse);
+      console.log("retornou do gemini");
 
       if (aiResponse) {
+        // Se a resposta for um fallback indicando falha no Gemini, logar de forma clara
+        const isFallback = typeof aiResponse === 'string' && aiResponse.startsWith('Desculpe');
+        if (isFallback) {
+          logger.warn(`Resposta do Gemini parece ser um fallback para ${phoneNumber}; enviando fallback ao usuário. Snippet: ${aiResponse.substring(0, 120)}`);
+        }
+
         // Verificar se deve enviar como áudio (TTS)
-        const sendAsAudio = config.ttsEnabled && 
+       /* const sendAsAudio = config.ttsEnabled && 
                            config.ttsVoice && 
-                           shouldSendAsAudio(aiResponse, combinedMessage, config.ttsEnabled);
+                           shouldSendAsAudio(aiResponse, combinedMessage, config.ttsEnabled);*/
+        const sendAsAudio = false;
 
         if (sendAsAudio) {
           try {
@@ -815,11 +1268,7 @@ class WhatsAppService {
 
             // Enviar áudio pelo WhatsApp
             // Nota: Gemini TTS retorna PCM wave, mas o WhatsApp aceita e converte automaticamente
-            await session.socket.sendMessage(phoneNumber, {
-              audio: audioBuffer,
-              mimetype: 'audio/ogg; codecs=opus',
-              ptt: true // Push-to-talk (áudio de voz)
-            });
+            await this.sendMessageSafe(sessionId, phoneNumber, { audio: audioBuffer, mimetype: 'audio/ogg; codecs=opus', ptt: true });
 
             // Limpar arquivo temporário
             cleanupTempAudio(audioPath);
@@ -840,9 +1289,7 @@ class WhatsAppService {
             logger.error(`❌ Erro ao enviar áudio TTS, enviando texto:`, ttsError);
             
             // Fallback: enviar como texto
-            await session.socket.sendMessage(phoneNumber, {
-              text: aiResponse
-            });
+            await this.sendMessageSafe(sessionId, phoneNumber, { text: aiResponse });
 
             this.io.emit('message-processed', {
               sessionId,
@@ -856,9 +1303,7 @@ class WhatsAppService {
           }
         } else {
           // Enviar como texto normalmente
-          await session.socket.sendMessage(phoneNumber, {
-            text: aiResponse
-          });
+          await this.sendMessageSafe(sessionId, phoneNumber, { text: aiResponse });
 
           logger.info(`✅ Resposta AI enviada para ${phoneNumber} (${messageCount} mensagens processadas)`);
           
@@ -875,15 +1320,73 @@ class WhatsAppService {
       }
     } catch (error) {
       logger.error(`❌ Erro ao processar mensagens agrupadas para ${phoneNumber}:`, error);
-      await session.socket.sendMessage(phoneNumber, {
-        text: 'Tivemos um problema ao processar sua mensagem. Por favor, tente novamente.'
-      });
+      await this.sendMessageSafe(sessionId, phoneNumber, { text: 'Tivemos um problema ao processar sua mensagem. Por favor, tente novamente.' }).catch(() => {});
       this.io.emit('message-error', {
         sessionId,
         error: error.message
       });
     }
   }
+  
+  // Restaurar sessões existentes no disco (reconectar após restart)
+  async restoreSessions() {
+    try {
+      logger.info('Iniciando restauração de sessões a partir do disco...');
+
+      if (!fs.existsSync(SESSIONS_PATH)) {
+        logger.info('Pasta de sessões não existe, nada para restaurar.');
+        return { success: true, restored: 0 };
+      }
+
+      const entries = fs.readdirSync(SESSIONS_PATH, { withFileTypes: true });
+      // Filtrar apenas diretórios válidos de sessão, ignorando backups/desabled gerados pelo sistema
+      const sessionDirs = entries
+        .filter(e => e.isDirectory())
+        .map(d => d.name)
+        .filter(name => {
+          // Ignorar pastas marcadas como disabled/backup (ex: session.disabled.123456 / session.backup.123)
+          const lower = name.toLowerCase();
+          if (lower.includes('.disabled') || lower.includes('.backup')) {
+            logger.info(`restoreSessions: pulando pasta de sessão marcada como disabled/backup: ${name}`);
+            return false;
+          }
+          // Ignorar nomes que comecem com '.' ou arquivos temporários
+          if (name.startsWith('.')) return false;
+          return true;
+        });
+
+      let restored = 0;
+
+      for (const sessionId of sessionDirs) {
+        // Verificar se existem arquivos de credenciais básicos antes de tentar reconectar
+        const sessionPath = path.join(SESSIONS_PATH, sessionId);
+        const hasFiles = fs.readdirSync(sessionPath).length > 0;
+        if (!hasFiles) {
+          logger.info(`Sessão ${sessionId} ignorada (sem arquivos de credenciais)`);
+          continue;
+        }
+
+        try {
+          logger.info(`Tentando restaurar sessão ${sessionId}...`);
+          await this.createSession(sessionId);
+          restored += 1;
+          // Pequena espera para evitar spikes de conexão
+          await new Promise(r => setTimeout(r, 1000));
+        } catch (error) {
+          logger.error(`Falha ao restaurar sessão ${sessionId}:`, error.message || error);
+          this.io.emit('connection-error', { sessionId, error: error.message || String(error) });
+        }
+      }
+
+      logger.info(`Restauração completa. Sessões restauradas: ${restored}`);
+      this.io.emit('sessions-restored', { count: restored });
+      return { success: true, restored };
+    } catch (error) {
+      logger.error('Erro ao tentar restaurar sessões:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
 }
 
 export default WhatsAppService;
