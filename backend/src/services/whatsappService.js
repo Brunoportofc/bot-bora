@@ -5,6 +5,7 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   downloadMediaMessage
 } from '@whiskeysockets/baileys';
+
 import QRCode from 'qrcode';
 import { Boom } from '@hapi/boom';
 import fs from 'fs';
@@ -28,6 +29,8 @@ import {
   saveTempAudio,
   cleanupTempAudio
 } from './ttsService.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const sessions = new Map();
 const sessionConfigs = new Map();
@@ -41,7 +44,7 @@ const generatingQR = new Set();
 // Buffer de mensagens por usuário (para agrupar mensagens antes de enviar ao Gemini)
 const messageBuffers = new Map(); // { phoneNumber: { messages: [], timer: timeoutId } }
 const BUFFER_TIMEOUT = 10000; // 10 segundos
-const apiKey = 'AIzaSyBUd78FQH2WuY1kumF_Vqt3EhcWUQg48jI';
+const apiKey = process.env.API_KEY;
 // Garantir que o diretório de sessões existe
 if (!fs.existsSync(SESSIONS_PATH)) {
   fs.mkdirSync(SESSIONS_PATH, { recursive: true });
