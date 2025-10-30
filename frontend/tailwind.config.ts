@@ -79,6 +79,45 @@ const config: Config = {
           '700': '#047857',
           '800': '#065f46',
           '900': '#064e3b',
+        },
+        'bora-blue': {
+          DEFAULT: '#243B6B',
+          '50': '#f1f4f9',
+          '100': '#e3e9f3',
+          '200': '#c7d3e7',
+          '300': '#9fb3d5',
+          '400': '#708dc0',
+          '500': '#4f6bab',
+          '600': '#3d5490',
+          '700': '#243B6B',
+          '800': '#2a3a5c',
+          '900': '#26334e',
+        },
+        'bora-red': {
+          DEFAULT: '#E31E24',
+          '50': '#fef2f2',
+          '100': '#fee2e2',
+          '200': '#fecaca',
+          '300': '#fca5a5',
+          '400': '#f87171',
+          '500': '#ef4444',
+          '600': '#E31E24',
+          '700': '#b91c1c',
+          '800': '#991b1b',
+          '900': '#7f1d1d',
+        },
+        'bora-yellow': {
+          DEFAULT: '#FFD700',
+          '50': '#fffbeb',
+          '100': '#fef3c7',
+          '200': '#fde68a',
+          '300': '#fcd34d',
+          '400': '#fbbf24',
+          '500': '#f59e0b',
+          '600': '#FFD700',
+          '700': '#a16207',
+          '800': '#854d0e',
+          '900': '#713f12',
         }
       },
       borderRadius: {
@@ -125,4 +164,4 @@ const config: Config = {
   plugins: [],
 } satisfies Config;
 
-export default config; 
+export default config;

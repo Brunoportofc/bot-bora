@@ -1,0 +1,38 @@
+<svg width="400" height="200" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Pin/Location Icon -->
+  <g transform="translate(320, 20)">
+    <!-- Pin shape -->
+    <path d="M40 0 C60 0 80 20 80 40 C80 60 40 80 40 80 C40 80 0 60 0 40 C0 20 20 0 40 0 Z" fill="#E31E24"/>
+    <circle cx="40" cy="40" r="25" fill="#FFD700"/>
+    <circle cx="40" cy="40" r="15" fill="#E31E24"/>
+    
+    <!-- Airplane -->
+    <g transform="translate(25, 25)">
+      <path d="M15 5 L25 15 L20 20 L15 15 L5 20 L0 15 L10 10 L5 0 L10 5 Z" fill="#243B6B"/>
+    </g>
+  </g>
+  
+  <!-- Main Text BORA -->
+  <g transform="translate(20, 60)">
+    <text x="0" y="0" font-family="Arial Black, sans-serif" font-size="48" font-weight="900" fill="#243B6B">BORA</text>
+  </g>
+  
+  <!-- Main Text EXPANDIR -->
+  <g transform="translate(20, 120)">
+    <text x="0" y="0" font-family="Arial Black, sans-serif" font-size="48" font-weight="900" fill="#243B6B">EXPANDIR</text>
+  </g>
+  
+  <!-- Subtitle -->
+  <g transform="translate(20, 160)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#243B6B">AGÊNCIA DE VIAGENS E</text>
+  </g>
+  <g transform="translate(20, 180)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#243B6B">ASSESSORIA DE IMIGRAÇÃO</text>
+  </g>
+  
+  <!-- Decorative lines -->
+  <rect x="0" y="90" width="30" height="4" fill="#E31E24"/>
+  <rect x="0" y="98" width="20" height="2" fill="#E31E24"/>
+  
+  <ellipse cx="380" cy="180" rx="15" ry="8" fill="#E31E24"/>
+</svg>

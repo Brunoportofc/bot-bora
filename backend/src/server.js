@@ -191,6 +191,31 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Obter status do AI
+  socket.on('get-ai-status', async () => {
+    try {
+      const sessions = whatsappService.getAllSessions();
+      const activeInstances = sessions.filter(s => s.connected).length;
+      
+      // Por enquanto, retornamos valores padrão
+      // Futuramente, estes valores podem ser obtidos de um banco de dados ou cache
+      socket.emit('ai-status-response', {
+        activeInstances: activeInstances,
+        totalMessages: 0,
+        averageResponseTime: 0,
+        errors: 0
+      });
+    } catch (error) {
+      logger.error('Erro ao obter status do AI:', error);
+      socket.emit('ai-status-response', {
+        activeInstances: 0,
+        totalMessages: 0,
+        averageResponseTime: 0,
+        errors: 0
+      });
+    }
+  });
+
   socket.on('disconnect', () => {
     logger.info(`Cliente desconectado: ${socket.id}`);
   });

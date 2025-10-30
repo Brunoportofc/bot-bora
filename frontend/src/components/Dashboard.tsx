@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, MessageSquare, Users, Activity, Bot, LogOut, Loader } from 'lucide-react';
+import { PlusCircle, MessageSquare, Users, Activity, Bot, Loader } from 'lucide-react';
 import WhatsAppInstanceCard from './WhatsAppInstanceCard';
 import WhatsAppConnectionModal, { ConnectionState } from './WhatsAppConnectionModal';
 import AIStatusCard from '@/components/AIStatusCard';
@@ -29,7 +29,6 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
   const [qrCode, setQrCode] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [removingInstances, setRemovingInstances] = useState<Set<number>>(new Set());
   const { toast } = useToast();
   const { socket, isConnected } = useSocket();
@@ -348,29 +347,12 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
     configuredInstances: instances.filter(i => i.apiKey && i.assistantId).length,
   };
 
-  const handleLogout = () => {
-    // Iniciar animação de logout
-    setIsLoggingOut(true);
-    
-    // Desconectar todas as instâncias antes de fazer logout
-    instances.forEach(instance => {
-      if (instance.isConnected) {
-        handleDisconnect(instance.id);
-      }
-    });
-    
-    // Aguardar a animação e então fazer logout
-    setTimeout(() => {
-      onLogout();
-    }, 1500); // Tempo suficiente para a animação
-  };
-
   return (
     <div className="min-h-screen bg-dark-navy-950">
       {/* Efeito de luz sutil */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-mint-glow/4 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-mint-glow/3 rounded-full blur-3xl"></div>
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-bora-blue/4 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-bora-blue/3 rounded-full blur-3xl"></div>
       </div>
 
       <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 relative z-10">
@@ -378,37 +360,12 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
         {isInitializing && (
           <div className="fixed inset-0 bg-dark-navy-950/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="text-center space-y-4 max-w-sm">
-              <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-mint-glow/20 to-secondary/20 rounded-full flex items-center justify-center animate-pulse shadow-glow">
-                <Loader size={24} className="sm:w-8 sm:h-8 text-mint-glow animate-spin" />
+              <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-bora-blue/20 to-bora-blue/30 rounded-full flex items-center justify-center animate-pulse shadow-glow">
+                <Loader size={24} className="sm:w-8 sm:h-8 text-bora-blue animate-spin" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-base sm:text-lg font-semibold text-mint-glow">Verificando sessões ativas...</h3>
-                <p className="text-xs sm:text-sm text-mint-glow/70">Aguarde enquanto sincronizamos suas instâncias</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Animação de Logout */}
-        {isLoggingOut && (
-          <div className="fixed inset-0 bg-dark-navy-950 z-50 flex items-center justify-center p-4">
-            <div className="text-center space-y-4 sm:space-y-6 animate-fade-in max-w-sm">
-              <div className="relative">
-                {/* Círculos animados */}
-                <div className="absolute inset-0 mx-auto w-16 h-16 sm:w-24 sm:h-24 bg-mint-glow/30 rounded-full animate-ping"></div>
-                <div className="absolute inset-0 mx-auto w-16 h-16 sm:w-24 sm:h-24 bg-secondary/30 rounded-full animate-ping animation-delay-200"></div>
-                <div className="relative mx-auto w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-mint-glow/20 to-secondary/20 rounded-full flex items-center justify-center shadow-glow">
-                  <LogOut size={32} className="sm:w-10 sm:h-10 text-mint-glow animate-pulse" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl sm:text-2xl font-bold text-mint-glow">Saindo...</h3>
-                <p className="text-base sm:text-lg text-mint-glow/70">Até logo! 👋</p>
-              </div>
-              <div className="flex justify-center space-x-1">
-                <div className="w-2 h-2 bg-mint-glow rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-2 h-2 bg-secondary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-2 h-2 bg-mint-glow/70 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                <h3 className="text-base sm:text-lg font-semibold text-bora-blue">Verificando sessões ativas...</h3>
+                <p className="text-xs sm:text-sm text-bora-blue/70">Aguarde enquanto sincronizamos suas instâncias</p>
               </div>
             </div>
           </div>
@@ -418,13 +375,17 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
             <div className="text-center sm:text-left">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-mint-glow to-secondary bg-clip-text text-transparent">
-                clínica.IA Manager
-              </h1>
-              <p className="text-mint-glow/70 mt-1 text-sm sm:text-base">
-                Bem-vindo, <span className="font-semibold text-mint-glow">{userEmail}</span>
+              <div className="flex justify-center sm:justify-start mb-2">
+                <img 
+                  src="/bora-expandir-logo.svg" 
+                  alt="Bora Expandir - Agência de Viagens e Assessoria de Imigração" 
+                  className="h-16 sm:h-20 lg:h-24 w-auto"
+                />
+              </div>
+              <p className="text-bora-blue/70 mt-1 text-sm sm:text-base">
+                Bem-vindo, <span className="font-semibold text-bora-blue">{userEmail}</span>
               </p>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
                 <span className={`text-xs ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
                   {isConnected ? 'Servidor Online' : 'Servidor Offline'}
@@ -454,61 +415,51 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
                   )}
                 </Tooltip>
               </TooltipProvider>
-              
-              <Button 
-                onClick={handleLogout}
-                variant="outline"
-                className="border border-mint-glow/30 hover:border-red-400 bg-dark-navy-950/70 hover:bg-red-500/10 text-mint-glow hover:text-red-400 transition-all duration-300 w-full sm:w-auto"
-                size="default"
-              >
-                <LogOut className="mr-2" size={18} />
-                <span className="text-sm sm:text-base">Sair</span>
-              </Button>
             </div>
           </div>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
-          <Card className="bg-dark-navy-950/90 border border-mint-glow/20 backdrop-blur-sm card-stats">
+          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-mint-glow">Total</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Total</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-mint-glow">{stats.totalInstances}/4</div>
-              <p className="text-xs sm:text-sm text-mint-glow/70 mt-1">
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.totalInstances}/4</div>
+              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">
                 {stats.totalInstances >= 4 ? 'limite atingido' : `${4 - stats.totalInstances} disponíveis`}
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-dark-navy-950/90 border border-secondary/20 backdrop-blur-sm card-stats">
+          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-secondary">Conectadas</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Conectadas</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-secondary">{stats.connectedInstances}</div>
-              <p className="text-xs sm:text-sm text-secondary/70 mt-1">ativas</p>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.connectedInstances}</div>
+              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">ativas</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-dark-navy-950/90 border border-mint-glow/30 backdrop-blur-sm card-stats">
+          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-mint-glow/90">Mensagens</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Mensagens</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-mint-glow">{stats.totalMessages}</div>
-              <p className="text-xs sm:text-sm text-mint-glow/70 mt-1">processadas</p>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.totalMessages}</div>
+              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">processadas</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-dark-navy-950/90 border border-secondary/30 backdrop-blur-sm card-stats">
+          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-secondary/90">Assistentes</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Assistentes</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-secondary">{stats.configuredInstances}</div>
-              <p className="text-xs sm:text-sm text-secondary/70 mt-1">configurados</p>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.configuredInstances}</div>
+              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">configurados</p>
             </CardContent>
           </Card>
         </div>
@@ -522,14 +473,13 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
 
           {/* Instances Grid */}
           <div className="xl:col-span-2 order-1 xl:order-2">
-            <h2 className="text-lg sm:text-xl font-semibold text-mint-glow mb-3 sm:mb-4">Instâncias WhatsApp</h2>
-            
-            {instances.length === 0 ? (
-              <Card className="border-dashed border-2 border-mint-glow/30 bg-dark-navy-950/70 backdrop-blur-sm">
-                <CardContent className="text-center py-8 sm:py-12 px-4">
-                  <MessageSquare className="mx-auto text-mint-glow/50 mb-4" size={40} />
-                  <h3 className="text-base sm:text-lg font-medium text-mint-glow mb-2">Nenhuma instância criada</h3>
-                  <p className="text-sm sm:text-base text-mint-glow/70 mb-4">Comece criando sua primeira instância do WhatsApp</p>
+            <h2 className="text-lg sm:text-xl font-semibold text-bora-blue mb-3 sm:mb-4">Instâncias WhatsApp</h2>
+          {instances.length === 0 ? (
+            <Card className="border-dashed border-2 border-bora-blue/30 bg-white/70 backdrop-blur-sm shadow-lg">
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
+                <MessageSquare className="mx-auto text-bora-blue/50 mb-4" size={40} />
+                <h3 className="text-base sm:text-lg font-medium text-bora-blue mb-2">Nenhuma instância criada</h3>
+                <p className="text-sm sm:text-base text-bora-blue/70 mb-4">Comece criando sua primeira instância do WhatsApp</p>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>

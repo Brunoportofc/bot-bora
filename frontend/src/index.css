@@ -4,50 +4,50 @@
 
 @layer base {
   :root {
-    /* Novo esquema de cores escuro */
-    --background: 218 54% 7%; /* Mais escuro que #0f1932 */
-    --foreground: 160 84% 39%; /* #75d3af */
+    /* Novo esquema de cores com fundo branco */
+    --background: 0 0% 100%; /* Branco #FFFFFF */
+    --foreground: 218 54% 42%; /* Azul #243B6B */
 
-    --card: 220 39% 12%; /* Mais escuro */
-    --card-foreground: 160 84% 39%; /* #75d3af */
+    --card: 0 0% 98%; /* Branco levemente acinzentado */
+    --card-foreground: 218 54% 42%; /* Azul #243B6B */
 
-    --popover: 220 39% 12%;
-    --popover-foreground: 160 84% 39%;
+    --popover: 0 0% 100%; /* Branco */
+    --popover-foreground: 218 54% 42%; /* Azul #243B6B */
 
-    --primary: 160 84% 39%; /* #75d3af */
-    --primary-foreground: 218 54% 7%; /* Mais escuro */
+    --primary: 218 54% 42%; /* Azul #243B6B */
+    --primary-foreground: 0 0% 100%; /* Branco */
 
-    --secondary: 142 76% 36%; /* Verde complementar */
-    --secondary-foreground: 218 54% 7%;
+    --secondary: 218 54% 42%; /* Azul #243B6B */
+    --secondary-foreground: 0 0% 100%; /* Branco */
 
-    --muted: 220 39% 18%; /* Mais escuro */
-    --muted-foreground: 160 50% 70%; /* Verde claro */
+    --muted: 0 0% 96%; /* Cinza muito claro */
+    --muted-foreground: 218 54% 42%; /* Azul #243B6B */
 
-    --accent: 160 84% 39%; /* #75d3af */
-    --accent-foreground: 218 54% 7%;
+    --accent: 218 54% 42%; /* Azul #243B6B */
+    --accent-foreground: 0 0% 100%; /* Branco */
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 39% 18%; /* Bordas mais escuras */
-    --input: 220 39% 14%; /* Input mais escuro */
-    --ring: 160 84% 39%; /* #75d3af para focus */
+    --border: 218 54% 85%; /* Azul muito claro para bordas */
+    --input: 0 0% 98%; /* Branco levemente acinzentado */
+    --ring: 218 54% 42%; /* Azul #243B6B para focus */
 
     --radius: 0.75rem;
 
-    /* Sidebar com tema escuro */
-    --sidebar-background: 218 54% 4%; /* Muito mais escuro */
-    --sidebar-foreground: 160 84% 39%;
-    --sidebar-primary: 160 84% 39%;
-    --sidebar-primary-foreground: 218 54% 7%;
-    --sidebar-accent: 220 39% 12%;
-    --sidebar-accent-foreground: 160 84% 39%;
-    --sidebar-border: 220 39% 18%;
-    --sidebar-ring: 160 84% 39%;
+    /* Sidebar com tema claro */
+    --sidebar-background: 0 0% 100%; /* Branco */
+    --sidebar-foreground: 218 54% 42%; /* Azul #243B6B */
+    --sidebar-primary: 218 54% 42%; /* Azul #243B6B */
+    --sidebar-primary-foreground: 0 0% 100%; /* Branco */
+    --sidebar-accent: 0 0% 96%; /* Cinza muito claro */
+    --sidebar-accent-foreground: 218 54% 42%; /* Azul #243B6B */
+    --sidebar-border: 218 54% 85%; /* Azul muito claro */
+    --sidebar-ring: 218 54% 42%; /* Azul #243B6B */
   }
 
   .dark {
-    /* Mantém o mesmo esquema para modo escuro */
+    /* Mantém o mesmo esquema para modo escuro se necessário */
     --background: 218 54% 7%;
     --foreground: 160 84% 39%;
 
@@ -93,11 +93,8 @@
   }
 
   body {
-    @apply bg-dark-navy text-mint-glow;
-    background-image: 
-      radial-gradient(circle at 20% 80%, rgba(117, 211, 175, 0.1) 0%, transparent 50%),
-      radial-gradient(circle at 80% 20%, rgba(117, 211, 175, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 40% 40%, rgba(117, 211, 175, 0.05) 0%, transparent 50%);
+    @apply bg-white text-bora-blue;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     /* Previne zoom em inputs no iOS */
     -webkit-text-size-adjust: 100%;
     /* Melhora o scroll no mobile */

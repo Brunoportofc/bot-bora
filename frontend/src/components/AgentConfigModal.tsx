@@ -224,12 +224,20 @@ const AgentConfigModal = ({
                         Voz do Assistente
                       </Label>
                       <Select value={ttsVoice} onValueChange={setTtsVoice}>
-                        <SelectTrigger className="bg-dark-navy-900 border-mint-glow/30 text-mint-glow">
+                        <SelectTrigger className="bg-dark-navy-900/80 backdrop-blur-sm border-mint-glow/30 text-mint-glow hover:bg-dark-navy-900/90 transition-colors">
                           <SelectValue placeholder="Selecione a voz" />
                         </SelectTrigger>
-                        <SelectContent className="bg-dark-navy-900 border-mint-glow/30">
+                        <SelectContent 
+                          className="bg-dark-navy-900/90 backdrop-blur-md border-mint-glow/30 shadow-xl"
+                          side="bottom"
+                          sideOffset={4}
+                        >
                           {GEMINI_VOICES.map((voice) => (
-                            <SelectItem key={voice.value} value={voice.value} className="text-mint-glow hover:bg-mint-glow/10">
+                            <SelectItem 
+                              key={voice.value} 
+                              value={voice.value} 
+                              className="text-mint-glow hover:bg-mint-glow/20 focus:bg-mint-glow/20 cursor-pointer"
+                            >
                               <div>
                                 <div className="font-medium">{voice.label}</div>
                                 <div className="text-xs text-mint-glow/60">{voice.gender}</div>

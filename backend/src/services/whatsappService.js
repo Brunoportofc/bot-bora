@@ -183,26 +183,81 @@ class WhatsAppService {
       const { version } = await fetchLatestBaileysVersion();
       logger.info(`createSession: versão do Baileys obtida: ${JSON.stringify(version)}`);
 
-      const socket = makeWASocket({
-        version,
-        auth: {
-          creds: state.creds,
-          keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
-        },
-        printQRInTerminal: false,
-        logger: baileysLogger,
-        browser: ['Chrome (Linux)', '', ''],
-        syncFullHistory: false,
-        markOnlineOnConnect: false,
-        defaultQueryTimeoutMs: 60000,
-        connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 10000,
-        getMessage: async (key) => {
-          // Implementação básica do getMessage conforme documentação
-          return { conversation: 'Mensagem não encontrada' };
-        },
-        shouldSyncHistoryMessage: () => false, // Desabilitar sync de histórico por enquanto
+      logger.info(`createSession: Iniciando criação do socket Baileys para ${sessionId}`, {
+        forceNewAuth: options.forceNewAuth,
+        hasCredentials: !!state.creds,
+        credentialsKeys: Object.keys(state.creds || {}),
+        version: version
       });
+
+      // Validação das credenciais antes da criação do socket
+      if (!state.creds) {
+        logger.error(`createSession: Credenciais não encontradas para ${sessionId}`);
+        throw new Error('Credenciais não encontradas');
+      }
+
+      if (!state.keys) {
+        logger.error(`createSession: Keys não encontradas para ${sessionId}`);
+        throw new Error('Keys não encontradas');
+      }
+
+      // Validação básica da estrutura das credenciais
+      const requiredCredFields = ['noiseKey', 'pairingEphemeralKeyPair', 'signedIdentityKey', 'signedPreKey', 'registrationId'];
+      const missingFields = requiredCredFields.filter(field => !state.creds[field]);
+      
+      if (missingFields.length > 0) {
+        logger.warn(`createSession: Campos de credenciais ausentes para ${sessionId}: ${missingFields.join(', ')}`);
+        // Não vamos bloquear por campos ausentes, apenas logar
+      }
+
+      logger.info(`createSession: Validação de credenciais passou para ${sessionId}`, {
+        credsValid: !!state.creds,
+        keysValid: !!state.keys,
+        missingFields: missingFields
+      });
+
+      let socket;
+      try {
+        // Configuração mínima do socket para teste
+        logger.info(`createSession: Tentando configuração mínima do socket para ${sessionId}`);
+        
+        socket = makeWASocket({
+          version,
+          auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
+          },
+          printQRInTerminal: false,
+          logger: baileysLogger
+        });
+
+      logger.info(`createSession: Socket Baileys criado com sucesso para ${sessionId}`, {
+        socketExists: !!socket,
+        wsReadyState: socket?.ws?.readyState,
+        socketType: typeof socket
+      });
+
+      } catch (socketError) {
+        logger.error(`createSession: ERRO ao criar socket Baileys para ${sessionId}:`);
+        logger.error(`Erro completo: ${socketError}`);
+        logger.error(`Mensagem: ${socketError?.message}`);
+        logger.error(`Nome: ${socketError?.name}`);
+        logger.error(`Código: ${socketError?.code}`);
+        logger.error(`Stack trace: ${socketError?.stack}`);
+        logger.error(`Tipo do erro: ${typeof socketError}`);
+        logger.error(`Constructor: ${socketError?.constructor?.name}`);
+        logger.error(`Propriedades do erro: ${JSON.stringify(Object.getOwnPropertyNames(socketError))}`);
+        
+        // Tentar capturar propriedades específicas do Baileys
+        if (socketError?.output) {
+          logger.error(`Boom output: ${JSON.stringify(socketError.output)}`);
+        }
+        if (socketError?.data) {
+          logger.error(`Dados do erro: ${JSON.stringify(socketError.data)}`);
+        }
+        
+        throw socketError;
+      }
 
       sessions.set(sessionId, { socket });
       logger.info(`createSession: socket instanciado e entry adicionada em memória para ${sessionId}. ws.readyState=${socket?.ws?.readyState}`);
@@ -305,9 +360,28 @@ class WhatsAppService {
   }
 
   async handleConnectionUpdate(sessionId, update) {
+    // Log detalhado de todos os updates de conexão
+    logger.info(`handleConnectionUpdate: evento recebido para ${sessionId}`, {
+      connection: update.connection,
+      hasQr: !!update.qr,
+      hasLastDisconnect: !!update.lastDisconnect,
+      updateKeys: Object.keys(update)
+    });
+
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      // Log detalhado do payload QR recebido
+      logger.info(`handleConnectionUpdate: QR recebido para ${sessionId}`, {
+        qrType: typeof qr,
+        qrLength: qr?.length || 'N/A',
+        qrIsBuffer: Buffer.isBuffer(qr),
+        qrIsString: typeof qr === 'string',
+        qrIsObject: typeof qr === 'object' && qr !== null,
+        qrConstructor: qr?.constructor?.name || 'N/A',
+        qrSample: typeof qr === 'string' ? qr.substring(0, 50) + '...' : 'N/A'
+      });
+
       // Emit raw QR payload for debugging (frontend/admin can inspect)
       try {
         this.io.emit('qr-raw', { sessionId, qrPayload: qr });
@@ -328,23 +402,48 @@ class WhatsAppService {
         } else if (qr && typeof qr === 'object' && typeof qr.qr === 'string') {
           qrString = qr.qr;
         } else {
-          try { qrString = JSON.stringify(qr); } catch(e) { qrString = String(qr); }
+          try { 
+            qrString = JSON.stringify(qr); 
+          } catch(e) { 
+            qrString = String(qr); 
+          }
         }
 
-        logger.info(`handleConnectionUpdate: recebendo qr (type=${typeof qr}, normalizedLength=${qrString ? qrString.length : 0}) para ${sessionId}`);
+        // Validar se qrString é válido antes de tentar gerar QR
+        if (!qrString || qrString.trim() === '' || qrString === 'null' || qrString === 'undefined') {
+          logger.error(`handleConnectionUpdate: QR string inválido para ${sessionId}:`, {
+            qrString,
+            originalQr: qr,
+            qrType: typeof qr
+          });
+          this.io.emit('qr-error', { sessionId, error: 'QR payload inválido ou vazio' });
+          return;
+        }
+
+        logger.info(`handleConnectionUpdate: QR normalizado para ${sessionId} (length=${qrString.length}, sample=${qrString.substring(0, 50)}...)`);
 
         // Tentar gerar DataURL a partir da string normalizada
         let qrDataURL;
         try {
           qrDataURL = await QRCode.toDataURL(qrString);
         } catch (innerErr) {
-          logger.warn(`QRCode.toDataURL falhou com normalized string — tentando fallback (session ${sessionId}): ${innerErr?.message || innerErr}`);
+          logger.warn(`QRCode.toDataURL falhou com normalized string — tentando fallback (session ${sessionId}):`, {
+            error: innerErr?.message || innerErr,
+            qrStringLength: qrString.length,
+            qrStringSample: qrString.substring(0, 100)
+          });
           // Fallback: tentar usar a string bruta (não JSONified)
           try {
             qrDataURL = await QRCode.toDataURL(String(qr));
           } catch (fallbackErr) {
             // Se tudo falhar, log completo e emitir erro
-            logger.error(`Erro ao gerar QR Code (fallback falhou) para ${sessionId}:`, { message: fallbackErr?.message || String(fallbackErr), stack: fallbackErr?.stack, qrPayload: qr });
+            logger.error(`Erro ao gerar QR Code (fallback falhou) para ${sessionId}:`, { 
+              message: fallbackErr?.message || String(fallbackErr), 
+              stack: fallbackErr?.stack, 
+              qrPayload: qr,
+              qrString: qrString,
+              qrType: typeof qr
+            });
             this.io.emit('qr-error', { sessionId, error: fallbackErr?.message || String(fallbackErr) });
             return;
           }
@@ -925,10 +1024,11 @@ class WhatsAppService {
 
   async generateQR(sessionId) {
     try {
-      logger.info(`Gerando QR Code para sessão ${sessionId}`);
+      logger.info(`generateQR: Iniciando geração de QR Code para sessão ${sessionId}`);
       
       // Remover sessão existente se houver
       if (sessions.has(sessionId)) {
+        logger.info(`generateQR: Removendo sessão existente ${sessionId}`);
         const session = sessions.get(sessionId);
         try {
           if (session?.socket) {
@@ -936,32 +1036,57 @@ class WhatsAppService {
             session.socket.end?.();
           }
         } catch (e) {
-          // Ignorar erros ao fechar socket
+          logger.warn(`generateQR: Erro ao fechar socket da sessão ${sessionId}:`, e?.message || e);
         }
         sessions.delete(sessionId);
+        logger.info(`generateQR: Sessão ${sessionId} removida do Map`);
       }
 
       // Limpar arquivos da sessão antigos
       const sessionPath = path.join(SESSIONS_PATH, sessionId);
+      logger.info(`generateQR: Verificando path da sessão: ${sessionPath}`);
       if (fs.existsSync(sessionPath)) {
         try {
           fs.rmSync(sessionPath, { recursive: true, force: true });
-          logger.info(`Arquivos de sessão ${sessionId} limpos`);
+          logger.info(`generateQR: Arquivos de sessão ${sessionId} limpos com sucesso`);
         } catch (error) {
-          logger.error(`Erro ao limpar sessão ${sessionId}:`, error);
+          logger.error(`generateQR: Erro ao limpar sessão ${sessionId}:`, { message: error?.message, stack: error?.stack });
+          throw error; // Re-throw para capturar no catch principal
         }
+      } else {
+        logger.info(`generateQR: Path da sessão ${sessionPath} não existe, continuando...`);
       }
 
-  // Aguardar um pouco antes de criar nova sessão
-  await new Promise(resolve => setTimeout(resolve, 1000));
+      // Aguardar um pouco antes de criar nova sessão
+      logger.info(`generateQR: Aguardando 1 segundo antes de criar nova sessão ${sessionId}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-  // Criar nova sessão forçando um auth limpo para obrigar geração de QR
-  await this.createSession(sessionId, { forceNewAuth: true });
+      // Criar nova sessão forçando um auth limpo para obrigar geração de QR
+      logger.info(`generateQR: Chamando createSession para ${sessionId} com forceNewAuth: true`);
+      await this.createSession(sessionId, { forceNewAuth: true });
       
+      logger.info(`generateQR: createSession completado com sucesso para ${sessionId}`);
       return { success: true, message: 'QR Code sendo gerado...' };
     } catch (error) {
-      // Log completo para facilitar diagnóstico (mensagem, stack e objeto)
-      logger.error(`Erro ao gerar QR para ${sessionId}:`, { message: error?.message || String(error), stack: error?.stack, errorObj: error });
+      // Log completo para facilitar diagnóstico
+      logger.error(`generateQR: ERRO CAPTURADO ao gerar QR para ${sessionId}:`);
+      logger.error(`Erro completo: ${error}`);
+      logger.error(`Mensagem: ${error?.message}`);
+      logger.error(`Nome: ${error?.name}`);
+      logger.error(`Código: ${error?.code}`);
+      logger.error(`Stack trace: ${error?.stack}`);
+      logger.error(`Tipo do erro: ${typeof error}`);
+      logger.error(`Constructor: ${error?.constructor?.name}`);
+      logger.error(`Propriedades do erro: ${JSON.stringify(Object.getOwnPropertyNames(error))}`);
+      
+      // Tentar capturar propriedades específicas do Baileys
+      if (error?.output) {
+        logger.error(`Boom output: ${JSON.stringify(error.output)}`);
+      }
+      if (error?.data) {
+        logger.error(`Dados do erro: ${JSON.stringify(error.data)}`);
+      }
+      
       return { success: false, error: error?.message || String(error) };
     }
   }
