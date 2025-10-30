@@ -16,12 +16,7 @@ import {
 } from "@/components/ui/tooltip";
 import API_CONFIG from '@/config/api';
 
-interface DashboardProps {
-  onLogout: () => void;
-  userEmail?: string;
-}
-
-const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
+const Dashboard = () => {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentInstance, setCurrentInstance] = useState<number | null>(null);
@@ -348,24 +343,24 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-dark-navy-950">
+    <div className="min-h-screen bg-gradient-to-br from-[#f1f4f9] to-white">
       {/* Efeito de luz sutil */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-bora-blue/4 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-bora-blue/3 rounded-full blur-3xl"></div>
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#243B6B]/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-[#243B6B]/3 rounded-full blur-3xl"></div>
       </div>
 
       <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 relative z-10">
         {/* Loading Inicial */}
         {isInitializing && (
-          <div className="fixed inset-0 bg-dark-navy-950/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-white/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="text-center space-y-4 max-w-sm">
-              <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-bora-blue/20 to-bora-blue/30 rounded-full flex items-center justify-center animate-pulse shadow-glow">
-                <Loader size={24} className="sm:w-8 sm:h-8 text-bora-blue animate-spin" />
+              <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-[#243B6B]/10 to-[#243B6B]/20 rounded-full flex items-center justify-center animate-pulse shadow-lg">
+                <Loader size={24} className="sm:w-8 sm:h-8 text-[#243B6B] animate-spin" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-base sm:text-lg font-semibold text-bora-blue">Verificando sessões ativas...</h3>
-                <p className="text-xs sm:text-sm text-bora-blue/70">Aguarde enquanto sincronizamos suas instâncias</p>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Verificando sessões ativas...</h3>
+                <p className="text-xs sm:text-sm text-gray-600">Aguarde enquanto sincronizamos suas instâncias</p>
               </div>
             </div>
           </div>
@@ -377,17 +372,17 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
             <div className="text-center sm:text-left">
               <div className="flex justify-center sm:justify-start mb-2">
                 <img 
-                  src="/bora-expandir-logo.svg" 
+                  src="/bora-logo.png" 
                   alt="Bora Expandir - Agência de Viagens e Assessoria de Imigração" 
                   className="h-16 sm:h-20 lg:h-24 w-auto"
                 />
               </div>
-              <p className="text-bora-blue/70 mt-1 text-sm sm:text-base">
-                Bem-vindo, <span className="font-semibold text-bora-blue">{userEmail}</span>
+              <p className="text-gray-600 mt-1 text-sm sm:text-base">
+                Painel de Controle
               </p>
               <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className={`text-xs ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`text-xs ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
                   {isConnected ? 'Servidor Online' : 'Servidor Offline'}
                 </span>
               </div>
@@ -421,45 +416,45 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
-          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
+          <Card className="bg-white/70 border border-[#243B6B]/20 backdrop-blur-md card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Total</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-gray-900">Total</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.totalInstances}/4</div>
-              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#243B6B]">{stats.totalInstances}/4</div>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">
                 {stats.totalInstances >= 4 ? 'limite atingido' : `${4 - stats.totalInstances} disponíveis`}
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
+          <Card className="bg-white/70 border border-[#243B6B]/20 backdrop-blur-md card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Conectadas</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-gray-900">Conectadas</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.connectedInstances}</div>
-              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">ativas</p>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#243B6B]">{stats.connectedInstances}</div>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">ativas</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
+          <Card className="bg-white/70 border border-[#243B6B]/20 backdrop-blur-md card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Mensagens</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-gray-900">Mensagens</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.totalMessages}</div>
-              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">processadas</p>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#243B6B]">{stats.totalMessages}</div>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">processadas</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/90 border border-bora-blue/20 backdrop-blur-sm card-stats shadow-lg">
+          <Card className="bg-white/70 border border-[#243B6B]/20 backdrop-blur-md card-stats shadow-lg">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-bora-blue">Assistentes</CardTitle>
+              <CardTitle className="text-sm sm:text-base lg:text-lg font-medium text-gray-900">Assistentes</CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-bora-blue">{stats.configuredInstances}</div>
-              <p className="text-xs sm:text-sm text-bora-blue/70 mt-1">configurados</p>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#243B6B]">{stats.configuredInstances}</div>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">configurados</p>
             </CardContent>
           </Card>
         </div>
@@ -473,13 +468,13 @@ const Dashboard = ({ onLogout, userEmail = "usuário" }: DashboardProps) => {
 
           {/* Instances Grid */}
           <div className="xl:col-span-2 order-1 xl:order-2">
-            <h2 className="text-lg sm:text-xl font-semibold text-bora-blue mb-3 sm:mb-4">Instâncias WhatsApp</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">Instâncias WhatsApp</h2>
           {instances.length === 0 ? (
-            <Card className="border-dashed border-2 border-bora-blue/30 bg-white/70 backdrop-blur-sm shadow-lg">
+            <Card className="border-dashed border-2 border-[#243B6B]/30 bg-white/70 backdrop-blur-md shadow-lg">
               <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
-                <MessageSquare className="mx-auto text-bora-blue/50 mb-4" size={40} />
-                <h3 className="text-base sm:text-lg font-medium text-bora-blue mb-2">Nenhuma instância criada</h3>
-                <p className="text-sm sm:text-base text-bora-blue/70 mb-4">Comece criando sua primeira instância do WhatsApp</p>
+                <MessageSquare className="mx-auto text-[#243B6B]/60 mb-4" size={40} />
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">Nenhuma instância criada</h3>
+                <p className="text-sm sm:text-base text-gray-600 mb-4">Comece criando sua primeira instância do WhatsApp</p>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>

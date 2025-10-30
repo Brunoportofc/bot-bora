@@ -9,7 +9,6 @@ Backend Node.js com Express, Baileys (WhatsApp Web API) e Socket.io para gerenci
 - **Baileys** - WhatsApp Web API
 - **Socket.io** - Comunicação em tempo real
 - **OpenAI Assistants API** - IA para respostas automáticas
-- **Firebase Admin** - Autenticação
 - **QRCode** - Geração de QR codes
 
 ## 📦 Instalação
@@ -25,21 +24,11 @@ cp .env.example .env
 
 ## ⚙️ Configuração
 
-### 1. Firebase Admin SDK
-
-1. Acesse o [Console do Firebase](https://console.firebase.google.com/)
-2. Vá em **Configurações do Projeto > Contas de serviço**
-3. Clique em **Gerar nova chave privada**
-4. Copie as credenciais para o `.env`
-
-### 2. Variáveis de Ambiente
+### Variáveis de Ambiente
 
 ```env
 PORT=3001
-FRONTEND_URL=https://frontendadm.vercel.app
-FIREBASE_PROJECT_ID=seu-projeto-id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk@seu-projeto.iam.gserviceaccount.com
+FRONTEND_URL=http://localhost:5173
 ```
 
 ## 🏃 Executar
@@ -98,17 +87,15 @@ backend/
 ├── src/
 │   ├── server.js              # Servidor principal
 │   ├── config/
-│   │   ├── firebase.js        # Config Firebase
 │   │   └── logger.js          # Config Logger
 │   ├── services/
 │   │   ├── whatsappService.js # Serviço Baileys
-│   │   └── openaiService.js   # Serviço OpenAI
+│   │   ├── openaiService.js   # Serviço OpenAI
+│   │   └── geminiService.js   # Serviço Gemini
 │   ├── controllers/
 │   │   └── whatsappController.js
 │   ├── routes/
 │   │   └── whatsappRoutes.js
-│   ├── middleware/
-│   │   └── authMiddleware.js  # Validação Firebase
 │   └── utils/
 │       └── cleanSessions.js   # Limpeza de sessões
 ├── sessions/                  # Sessões WhatsApp (auto-criado)
@@ -118,10 +105,8 @@ backend/
 
 ## 🔒 Segurança
 
-- Autenticação via Firebase Admin SDK
-- Validação de tokens em todas as rotas
 - CORS configurado para frontend específico
-- Sessões isoladas por usuário
+- Sessões isoladas por ID
 
 ## 🐛 Troubleshooting
 
@@ -132,10 +117,6 @@ backend/
 ### Sessão não conecta
 - Limpe as sessões antigas: `npm run clean`
 - Reinicie o servidor
-
-### Erro Firebase
-- Verifique as credenciais no `.env`
-- Confirme que a service account tem permissões
 
 ## 📝 Notas
 

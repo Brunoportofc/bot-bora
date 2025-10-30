@@ -211,7 +211,7 @@ const WhatsAppInstanceCard = ({
             <Button
               onClick={() => onGenerateQR(instance.id)}
               disabled={isGeneratingQR}
-              className="w-full bg-gradient-to-r from-mint-glow to-secondary hover:from-mint-glow/90 hover:to-secondary/90 text-dark-navy transition-all duration-300 rounded-xl h-10 sm:h-11 text-sm sm:text-base"
+              className="w-full btn-qr-code rounded-xl h-10 sm:h-11 text-sm sm:text-base"
             >
               Gerar QR Code
             </Button>

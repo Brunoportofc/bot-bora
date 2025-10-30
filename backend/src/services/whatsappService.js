@@ -35,6 +35,8 @@ const pendingSends = new Map(); // sessionId -> [{ jid, payload, def, created }]
 const SESSIONS_PATH = process.env.SESSIONS_PATH || './sessions';
 // Novo: bloqueio para criações de sessão em andamento (evita remoção concorrente de arquivos)
 const activeSessionCreations = new Set();
+// Flag para indicar que estamos gerando QR Code e não queremos reconexão automática
+const generatingQR = new Set();
 
 // Buffer de mensagens por usuário (para agrupar mensagens antes de enviar ao Gemini)
 const messageBuffers = new Map(); // { phoneNumber: { messages: [], timer: timeoutId } }
@@ -484,6 +486,12 @@ class WhatsAppService {
       sessions.delete(sessionId);
 
       if (shouldReconnect) {
+        // Verificar se estamos gerando QR Code - se sim, NÃO reconectar automaticamente
+        if (generatingQR.has(sessionId)) {
+          logger.info(`Conexão fechada para ${sessionId} durante geração de QR Code - NÃO reconectando automaticamente`);
+          return;
+        }
+
         // Só emitir evento de desconexão se não for um erro temporário
         if (statusCode !== DisconnectReason.timedOut && statusCode !== DisconnectReason.connectionLost) {
           this.io.emit('disconnected', { sessionId, shouldReconnect: true });
@@ -1026,6 +1034,9 @@ class WhatsAppService {
     try {
       logger.info(`generateQR: Iniciando geração de QR Code para sessão ${sessionId}`);
       
+      // Marcar que estamos gerando QR Code (evitar reconexão automática)
+      generatingQR.add(sessionId);
+      
       // Remover sessão existente se houver
       if (sessions.has(sessionId)) {
         logger.info(`generateQR: Removendo sessão existente ${sessionId}`);
@@ -1064,6 +1075,12 @@ class WhatsAppService {
       // Criar nova sessão forçando um auth limpo para obrigar geração de QR
       logger.info(`generateQR: Chamando createSession para ${sessionId} com forceNewAuth: true`);
       await this.createSession(sessionId, { forceNewAuth: true });
+      
+      // Remover flag após 30 segundos (tempo suficiente para escanear QR)
+      setTimeout(() => {
+        generatingQR.delete(sessionId);
+        logger.info(`generateQR: Flag de geração de QR removida para ${sessionId}`);
+      }, 30000);
       
       logger.info(`generateQR: createSession completado com sucesso para ${sessionId}`);
       return { success: true, message: 'QR Code sendo gerado...' };

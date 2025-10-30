@@ -52,7 +52,12 @@ const WhatsAppConnectionModal = ({
           <div className="flex flex-col items-center justify-center space-y-3 sm:space-y-4 py-3 sm:py-4 px-4">
             {qrCode && (
               <>
-                <div className="bg-white p-2 sm:p-4 rounded-xl border border-mint-glow/30 max-w-full">
+                <div className="bg-white/95 p-2 sm:p-4 rounded-xl border border-white/40 backdrop-blur-xl shadow-2xl max-w-full" style={{
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  boxShadow: '0 8px 32px 0 rgba(255, 255, 255, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)'
+                }}>
                   <img 
                     src={qrCode} 
                     alt="QR Code WhatsApp" 
@@ -60,12 +65,12 @@ const WhatsAppConnectionModal = ({
                   />
                 </div>
                 <div className="text-center space-y-2 max-w-sm">
-                  <h3 className="text-base sm:text-lg font-semibold text-mint-glow">Escaneie o QR Code</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-white">Escaneie o QR Code</h3>
                   <div className="space-y-1">
-                    <p className="text-xs sm:text-sm text-mint-glow/70">1. Abra o WhatsApp no seu celular</p>
-                    <p className="text-xs sm:text-sm text-mint-glow/70">2. Vá em Configurações › Aparelhos conectados</p>
-                    <p className="text-xs sm:text-sm text-mint-glow/70">3. Clique em "Conectar um aparelho"</p>
-                    <p className="text-xs sm:text-sm text-mint-glow/70">4. Escaneie este código</p>
+                    <p className="text-xs sm:text-sm text-white/90">1. Abra o WhatsApp no seu celular</p>
+                    <p className="text-xs sm:text-sm text-white/90">2. Vá em Configurações › Aparelhos conectados</p>
+                    <p className="text-xs sm:text-sm text-white/90">3. Clique em "Conectar um aparelho"</p>
+                    <p className="text-xs sm:text-sm text-white/90">4. Escaneie este código</p>
                   </div>
                 </div>
               </>
