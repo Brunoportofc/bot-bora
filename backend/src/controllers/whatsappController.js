@@ -112,11 +112,12 @@ class WhatsAppController {
         });
       }
 
-      if (!apiKey) {
-        logger.error('API Key não fornecida');
+      // API Key agora é opcional - se não fornecida, usará a do .env
+      if (!apiKey && !process.env.GEMINI_API_KEY) {
+        logger.error('API Key não fornecida e não há chave padrão no .env');
         return res.status(400).json({
           success: false,
-          error: 'API Key é obrigatória'
+          error: 'API Key é obrigatória (configure no .env ou forneça na configuração)'
         });
       }
 
@@ -130,12 +131,12 @@ class WhatsAppController {
 
       const result = this.whatsappService.setSessionConfig(sessionId, {
         name: name || `Instância ${sessionId}`,
-        apiKey,
+        apiKey: apiKey || process.env.GEMINI_API_KEY, // Usa a chave fornecida ou a do .env
         aiProvider: aiProvider || 'gemini',
         assistantId,
         model: model || 'gemini-2.0-flash-exp',
         systemPrompt: systemPrompt || '',
-        temperature: temperature !== undefined ? temperature : 1.0,
+        temperature: temperature !== undefined ? temperature : 1.5,
         ttsEnabled: ttsEnabled || false,
         ttsVoice: ttsVoice || 'Aoede',
         enabled

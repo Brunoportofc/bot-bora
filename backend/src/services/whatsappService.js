@@ -25,6 +25,7 @@ import {
 import {
   generateSpeech,
   shouldSendAsAudio,
+  separateTextAndLinks,
   saveTempAudio,
   cleanupTempAudio
 } from './ttsService.js';
@@ -41,7 +42,6 @@ const generatingQR = new Set();
 // Buffer de mensagens por usuário (para agrupar mensagens antes de enviar ao Gemini)
 const messageBuffers = new Map(); // { phoneNumber: { messages: [], timer: timeoutId } }
 const BUFFER_TIMEOUT = 10000; // 10 segundos
-const apiKey = 'AIzaSyBUd78FQH2WuY1kumF_Vqt3EhcWUQg48jI';
 // Garantir que o diretório de sessões existe
 if (!fs.existsSync(SESSIONS_PATH)) {
   fs.mkdirSync(SESSIONS_PATH, { recursive: true });
@@ -486,7 +486,16 @@ class WhatsAppService {
       sessions.delete(sessionId);
 
       if (shouldReconnect) {
-        // Verificar se estamos gerando QR Code - se sim, NÃO reconectar automaticamente
+        // Se recebemos erro 515 (Stream Error) ou 408 (Restart Required), significa que o QR foi escaneado
+        // Remover flag de geração de QR para permitir reconexão
+        if (statusCode === 515 || statusCode === DisconnectReason.restartRequired) {
+          if (generatingQR.has(sessionId)) {
+            logger.info(`QR Code foi escaneado para ${sessionId} (erro ${statusCode}) - removendo flag e permitindo reconexão`);
+            generatingQR.delete(sessionId);
+          }
+        }
+        
+        // Verificar se estamos gerando QR Code - se sim, NÃO reconectar automaticamente (apenas se QR ainda não foi escaneado)
         if (generatingQR.has(sessionId)) {
           logger.info(`Conexão fechada para ${sessionId} durante geração de QR Code - NÃO reconectando automaticamente`);
           return;
@@ -518,6 +527,12 @@ class WhatsAppService {
     } else if (connection === 'open') {
       logger.info(`Conexão estabelecida para ${sessionId}`);
       
+      // Remover flag de geração de QR quando conexão for estabelecida com sucesso
+      if (generatingQR.has(sessionId)) {
+        logger.info(`Conexão estabelecida com sucesso para ${sessionId} - removendo flag de geração de QR`);
+        generatingQR.delete(sessionId);
+      }
+      
       const session = sessions.get(sessionId);
       if (session?.socket) {
         const user = session.socket.user;
@@ -540,13 +555,20 @@ class WhatsAppService {
         }
       }
     } else if (connection === 'connecting') {
+      // Quando começar a conectar após escanear QR, remover a flag
+      if (generatingQR.has(sessionId)) {
+        logger.info(`Iniciando conexão para ${sessionId} - removendo flag de geração de QR`);
+        generatingQR.delete(sessionId);
+      }
       this.io.emit('connecting', { sessionId });
     }
   }
 
   async handleIncomingMessages(sessionId, messages) {
-    const config = sessionConfigs.get(sessionId);    
-    console.log(apiKey);
+    const config = sessionConfigs.get(sessionId);
+    // Usar API key da configuração da instância ou a padrão do sistema
+    const apiKey = config?.apiKey || process.env.GEMINI_API_KEY;
+    console.log('API Key configurada:', apiKey ? 'Sim' : 'Não');
     
     
     for (const message of messages) {
@@ -633,9 +655,9 @@ class WhatsAppService {
                   audioBuffer,
                   message.key.remoteJid,
                   apiKey,
-                  config.model || 'gemini-2.0-flash-exp',
-                  config.systemPrompt || '',
-                  config.temperature || 1.0
+                  'gemini-2.5-flash', // Modelo fixo
+                  config.systemPrompt || '', // Prompt personalizado
+                  1.0 // Temperatura fixa
                 );
               } 
               
@@ -697,9 +719,9 @@ class WhatsAppService {
                   imageBuffer,
                   message.key.remoteJid,
                   apiKey,
-                  config.model || 'gemini-2.0-flash-exp',
-                  config.systemPrompt || '',
-                  config.temperature || 1.0,
+                  'gemini-2.5-flash', // Modelo fixo
+                  config.systemPrompt || '', // Prompt personalizado
+                  1.0, // Temperatura fixa
                   imageMessage.caption || ''
                 );
               } 
@@ -761,9 +783,9 @@ class WhatsAppService {
                   documentMessage.fileName || 'documento',
                   message.key.remoteJid,
                   apiKey,
-                  config.model || 'gemini-2.0-flash-exp',
-                  config.systemPrompt || '',
-                  config.temperature || 1.0,
+                  'gemini-2.5-flash', // Modelo fixo
+                  config.systemPrompt || '', // Prompt personalizado
+                  1.0, // Temperatura fixa
                   documentMessage.caption || ''
                 );
               } 
@@ -793,7 +815,123 @@ class WhatsAppService {
           } 
          
           if (aiResponse) {
-            await this.sendMessageSafe(sessionId, message.key.remoteJid, { text: aiResponse });
+            // Verificar se deve enviar como áudio (TTS)
+            const receivedAudio = !!audioMessage;
+            const sendAsAudio = config?.ttsEnabled && 
+                               receivedAudio && 
+                               shouldSendAsAudio(aiResponse, '', config.ttsEnabled, receivedAudio);
+
+            // Separar texto de links
+            const { textWithoutLinks, links, hasLinks } = separateTextAndLinks(aiResponse);
+
+            if (sendAsAudio) {
+              try {
+                const geminiApiKey = config?.apiKey || process.env.GEMINI_API_KEY;
+                
+                // Se tem links, enviar texto como áudio e links como texto separado
+                if (hasLinks && textWithoutLinks.length > 0) {
+                  logger.info(`🎤📝 Resposta tem texto + links - enviando áudio e texto separados`);
+                  
+                  // 1. Enviar texto como áudio
+                  logger.info(`🎤 Gerando áudio para texto (sem links)...`);
+                  
+                  // Mostrar "gravando áudio..."
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'recording');
+                  
+                  const audioBuffer = await generateSpeech(
+                    textWithoutLinks,
+                    geminiApiKey,
+                    config.ttsVoice || 'Aoede',
+                    'pt-BR'
+                  );
+
+                  const audioPath = saveTempAudio(audioBuffer);
+                  
+                  await this.sendMessageSafe(sessionId, message.key.remoteJid, {
+                    audio: audioBuffer,
+                    mimetype: 'audio/ogg; codecs=opus',
+                    ptt: true
+                  });
+
+                  // Parar indicador
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'paused');
+                  
+                  cleanupTempAudio(audioPath);
+                  logger.info(`✅ Áudio (texto) enviado`);
+
+                  // 2. Enviar links como texto (após pequeno delay)
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  
+                  // Mostrar "digitando..."
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'composing');
+                  
+                  const linksText = links.length === 1 
+                    ? `🔗 Link: ${links[0]}` 
+                    : `🔗 Links:\n${links.map((link, i) => `${i + 1}. ${link}`).join('\n')}`;
+                  
+                  await this.sendMessageSafe(sessionId, message.key.remoteJid, { text: linksText });
+                  
+                  // Parar indicador
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'paused');
+                  
+                  logger.info(`✅ Links enviados como texto separado`);
+                  
+                } else if (hasLinks && textWithoutLinks.length === 0) {
+                  // Se só tem links, enviar como texto
+                  logger.info(`🔗 Resposta contém apenas links - enviando como texto`);
+                  
+                  // Mostrar "digitando..."
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'composing');
+                  
+                  await this.sendMessageSafe(sessionId, message.key.remoteJid, { text: aiResponse });
+                  
+                  // Parar indicador
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'paused');
+                  
+                } else {
+                  // Se não tem links, enviar tudo como áudio
+                  logger.info(`🎤 Gerando resposta em áudio (sem links)...`);
+                  
+                  // Mostrar "gravando áudio..."
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'recording');
+                  
+                  const audioBuffer = await generateSpeech(
+                    aiResponse,
+                    geminiApiKey,
+                    config.ttsVoice || 'Aoede',
+                    'pt-BR'
+                  );
+
+                  const audioPath = saveTempAudio(audioBuffer);
+
+                  await this.sendMessageSafe(sessionId, message.key.remoteJid, {
+                    audio: audioBuffer,
+                    mimetype: 'audio/ogg; codecs=opus',
+                    ptt: true
+                  });
+
+                  // Parar indicador
+                  await this.sendPresence(sessionId, message.key.remoteJid, 'paused');
+                  
+                  cleanupTempAudio(audioPath);
+                  logger.info(`✅ Resposta em áudio enviada`);
+                }
+                
+              } catch (ttsError) {
+                logger.error('Erro ao gerar/enviar áudio, enviando texto:', ttsError);
+                // Fallback para texto se falhar
+                // Mostrar "digitando..."
+                await this.sendPresence(sessionId, message.key.remoteJid, 'composing');
+                await this.sendMessageSafe(sessionId, message.key.remoteJid, { text: aiResponse });
+                await this.sendPresence(sessionId, message.key.remoteJid, 'paused');
+              }
+            } else {
+              // Enviar como texto
+              // Mostrar "digitando..."
+              await this.sendPresence(sessionId, message.key.remoteJid, 'composing');
+              await this.sendMessageSafe(sessionId, message.key.remoteJid, { text: aiResponse });
+              await this.sendPresence(sessionId, message.key.remoteJid, 'paused');
+            }
 
             logger.info(`Resposta AI enviada para ${message.key.remoteJid}`);
             
@@ -805,6 +943,7 @@ class WhatsAppService {
               isAudio: !!audioMessage,
               isImage: !!imageMessage,
               isDocument: !!documentMessage,
+              sentAsAudio: sendAsAudio,
               transcription,
               imageAnalysis,
               documentContent,
@@ -924,6 +1063,18 @@ class WhatsAppService {
   }
 
   // Envia mensagem com tentativas e reconexão automática se necessário
+  async sendPresence(sessionId, jid, presenceType = 'composing') {
+    try {
+      const session = sessions.get(sessionId);
+      if (!session?.socket || !this.isSocketOpen(session.socket)) {
+        return;
+      }
+      await session.socket.sendPresenceUpdate(presenceType, jid);
+    } catch (error) {
+      logger.error(`Erro ao enviar presence ${presenceType}:`, error);
+    }
+  }
+
   async sendMessageSafe(sessionId, jid, messagePayload, opts = {}) {
     const attempts = opts.attempts || 3;
     const delayMs = opts.delayMs || 1000;
@@ -1262,7 +1413,7 @@ class WhatsAppService {
     try {
       sessionConfigs.set(sessionId, {
         aiProvider: config.aiProvider || 'gemini', // 'gemini' ou 'openai'
-        apiKey: apiKey,
+        apiKey: config.apiKey || process.env.GEMINI_API_KEY, // API key da instância ou padrão do sistema
         assistantId: config.assistantId, // Apenas para OpenAI
         model: config.model || 'gemini-2.0-flash-exp', // Modelo Gemini
         systemPrompt: config.systemPrompt || '', // Prompt do sistema
@@ -1359,15 +1510,16 @@ class WhatsAppService {
         console.log("useGemini true, enviando para gemini");
         console.log("combinedMessage", combinedMessage);
         console.log("phoneNumber", phoneNumber);
-        console.log("apiKey", apiKey);
+        console.log("apiKey configurada:", config?.apiKey ? 'Sim' : 'Não');
         
+        const geminiApiKey = config?.apiKey || process.env.GEMINI_API_KEY;
         aiResponse = await processMessageWithGemini(
           combinedMessage,
           phoneNumber,
-          apiKey,
-          'gemini-2.0-flash',
-          '',
-          1.0
+          geminiApiKey,
+          'gemini-2.5-flash', // Modelo fixo
+          config?.systemPrompt || '', // Prompt personalizado do frontend
+          1.0 // Temperatura fixa
         );
       } 
       console.log("aiResponse", aiResponse);
@@ -1393,7 +1545,7 @@ class WhatsAppService {
             // Gerar áudio
             const audioBuffer = await generateSpeech(
               aiResponse,
-              apiKey,
+              geminiApiKey,
               config.ttsVoice || 'Aoede',
               'pt-BR'
             );
@@ -1431,7 +1583,10 @@ class WhatsAppService {
             logger.error(`❌ Erro ao enviar áudio TTS, enviando texto:`, ttsError);
             
             // Fallback: enviar como texto
+            // Mostrar "digitando..."
+            await this.sendPresence(sessionId, phoneNumber, 'composing');
             await this.sendMessageSafe(sessionId, phoneNumber, { text: aiResponse });
+            await this.sendPresence(sessionId, phoneNumber, 'paused');
 
             this.io.emit('message-processed', {
               sessionId,
@@ -1445,7 +1600,10 @@ class WhatsAppService {
           }
         } else {
           // Enviar como texto normalmente
+          // Mostrar "digitando..."
+          await this.sendPresence(sessionId, phoneNumber, 'composing');
           await this.sendMessageSafe(sessionId, phoneNumber, { text: aiResponse });
+          await this.sendPresence(sessionId, phoneNumber, 'paused');
 
           logger.info(`✅ Resposta AI enviada para ${phoneNumber} (${messageCount} mensagens processadas)`);
           
@@ -1467,6 +1625,11 @@ class WhatsAppService {
         sessionId,
         error: error.message
       });
+    } finally {
+      // SEMPRE limpar o buffer após processar (sucesso ou erro)
+      const bufferKey = `${sessionId}_${phoneNumber}`;
+      messageBuffers.delete(bufferKey);
+      logger.info(`🧹 Buffer limpo para ${phoneNumber}`);
     }
   }
   

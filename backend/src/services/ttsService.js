@@ -205,77 +205,66 @@ export async function generateSpeech(text, apiKey, voiceName = 'Kore', languageC
 }
 
 /**
+ * Detecta se a resposta contém links (URLs)
+ * @param {string} text - Texto da resposta
+ * @returns {boolean} - true se contém links
+ */
+function hasLinks(text) {
+  // Regex para detectar URLs (http://, https://, www., etc)
+  const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(\w+\.(com|net|org|br|io|dev|app|co)[^\s]*)/gi;
+  return urlRegex.test(text);
+}
+
+/**
+ * Separa texto de links em uma resposta
+ * @param {string} text - Texto completo
+ * @returns {object} - { textWithoutLinks, links, hasLinks }
+ */
+export function separateTextAndLinks(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(\w+\.(com|net|org|br|io|dev|app|co)[^\s]*)/gi;
+  
+  const links = [];
+  let match;
+  
+  // Extrair todos os links
+  while ((match = urlRegex.exec(text)) !== null) {
+    links.push(match[0]);
+  }
+  
+  // Remover links do texto
+  let textWithoutLinks = text.replace(urlRegex, '').trim();
+  
+  // Limpar múltiplos espaços e quebras de linha
+  textWithoutLinks = textWithoutLinks.replace(/\s+/g, ' ').trim();
+  
+  return {
+    textWithoutLinks,
+    links,
+    hasLinks: links.length > 0
+  };
+}
+
+/**
  * Detecta se o texto deve ser convertido em áudio
  * @param {string} text - Resposta do Gemini
- * @param {string} userMessage - Mensagem original do usuário
+ * @param {string} userMessage - Mensagem original do usuário (opcional)
  * @param {boolean} ttsEnabled - Se TTS está habilitado
+ * @param {boolean} receivedAudio - Se a mensagem recebida foi um áudio
  * @returns {boolean} - true se deve enviar áudio
  */
-export function shouldSendAsAudio(text, userMessage, ttsEnabled) {
+export function shouldSendAsAudio(text, userMessage = '', ttsEnabled, receivedAudio = false) {
   if (!ttsEnabled) {
     return false;
   }
 
-  // Palavras-chave que indicam que o usuário quer áudio
-  const audioKeywords = [
-    'manda áudio',
-    'manda audio',
-    'envia áudio',
-    'envia audio',
-    'fala pra mim',
-    'me fala',
-    'quero ouvir',
-    'pode falar',
-    'me conta',
-    'áudio',
-    'audio',
-    'voz',
-    'fala',
-    'por áudio',
-    'por audio'
-  ];
-
-  const userMessageLower = userMessage.toLowerCase();
-  const requestsAudio = audioKeywords.some(keyword => userMessageLower.includes(keyword));
-
-  if (requestsAudio) {
-    logger.info('🎤 Cliente pediu áudio explicitamente');
+  // REGRA: Se recebeu áudio, responde com áudio (mesmo que tenha links - os links serão separados)
+  if (receivedAudio) {
+    logger.info('🎤 Mensagem recebida foi áudio - respondendo com áudio');
     return true;
   }
 
-  // Contextos onde áudio é útil (Gemini decide inteligentemente)
-  const audioContexts = [
-    'vou explicar',
-    'deixa eu explicar',
-    'é importante que você entenda',
-    'presta atenção',
-    'escuta',
-    'ouça com atenção',
-    'vou te contar',
-    'história',
-    'narrativa'
-  ];
-
-  const textLower = text.toLowerCase();
-  const hasAudioContext = audioContexts.some(context => textLower.includes(context));
-
-  // Enviar áudio para textos médios/longos com contexto narrativo
-  if (hasAudioContext && text.length > 100) {
-    logger.info('🎤 Contexto narrativo detectado, enviando áudio');
-    return true;
-  }
-
-  // Para textos muito curtos, não enviar áudio (evitar spam)
-  if (text.length < 50) {
-    return false;
-  }
-
-  // Aleatoriamente enviar áudio em 20% das mensagens longas (naturalidade)
-  if (text.length > 200 && Math.random() < 0.2) {
-    logger.info('🎤 Enviando áudio para variar a conversa');
-    return true;
-  }
-
+  // Se não recebeu áudio, não envia áudio
+  logger.info('📝 Mensagem não foi áudio - respondendo com texto');
   return false;
 }
 
@@ -343,6 +332,7 @@ setInterval(() => {
 export default {
   generateSpeech,
   shouldSendAsAudio,
+  separateTextAndLinks,
   saveTempAudio,
   cleanupTempAudio,
   cleanupOldAudios

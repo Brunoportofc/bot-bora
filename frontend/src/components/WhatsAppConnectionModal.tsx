@@ -35,14 +35,14 @@ const WhatsAppConnectionModal = ({
         return (
           <div className="flex flex-col items-center justify-center space-y-4 sm:space-y-6 py-6 sm:py-8 px-4">
             <div className="relative">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-mint-glow/20 rounded-full flex items-center justify-center">
-                <QrCode size={24} className="sm:w-8 sm:h-8 text-mint-glow" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-full flex items-center justify-center">
+                <QrCode size={24} className="sm:w-8 sm:h-8 text-white" />
               </div>
-              <div className="absolute inset-0 border-4 border-transparent border-t-mint-glow rounded-full animate-spin"></div>
+              <div className="absolute inset-0 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
             </div>
             <div className="text-center space-y-2">
-              <h3 className="text-base sm:text-lg font-semibold text-mint-glow">Gerando QR Code</h3>
-              <p className="text-xs sm:text-sm text-mint-glow/70">Preparando código para {instanceName}...</p>
+              <h3 className="text-base sm:text-lg font-semibold text-white">Gerando QR Code</h3>
+              <p className="text-xs sm:text-sm text-white/80">Preparando código para {instanceName}...</p>
             </div>
           </div>
         );
@@ -86,7 +86,7 @@ const WhatsAppConnectionModal = ({
             </div>
             <div className="text-center space-y-2">
               <h3 className="text-base sm:text-lg font-semibold text-yellow-400">Verificando QR Code</h3>
-              <p className="text-xs sm:text-sm text-mint-glow/70">Detectamos que você escaneou o código...</p>
+              <p className="text-xs sm:text-sm text-white/80">Detectamos que você escaneou o código...</p>
             </div>
           </div>
         );
@@ -94,12 +94,12 @@ const WhatsAppConnectionModal = ({
       case 'connecting':
         return (
           <div className="flex flex-col items-center justify-center space-y-4 sm:space-y-6 py-6 sm:py-8 px-4">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-400/20 rounded-full flex items-center justify-center">
-              <Loader size={24} className="sm:w-8 sm:h-8 text-blue-400 animate-spin" />
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-full flex items-center justify-center">
+              <Loader size={24} className="sm:w-8 sm:h-8 text-white animate-spin" />
             </div>
             <div className="text-center space-y-2">
-              <h3 className="text-base sm:text-lg font-semibold text-blue-400">Conectando ao WhatsApp</h3>
-              <p className="text-xs sm:text-sm text-mint-glow/70">Estabelecendo conexão segura...</p>
+              <h3 className="text-base sm:text-lg font-semibold text-white">Conectando ao WhatsApp</h3>
+              <p className="text-xs sm:text-sm text-white/80">Estabelecendo conexão segura...</p>
             </div>
           </div>
         );
@@ -107,16 +107,16 @@ const WhatsAppConnectionModal = ({
       case 'connected':
         return (
           <div className="flex flex-col items-center justify-center space-y-4 sm:space-y-6 py-6 sm:py-8 px-4">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-secondary/20 rounded-full flex items-center justify-center">
-              <CheckCircle2 size={32} className="sm:w-10 sm:h-10 text-secondary" />
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-400/20 rounded-full flex items-center justify-center">
+              <CheckCircle2 size={32} className="sm:w-10 sm:h-10 text-green-400" />
             </div>
             <div className="text-center space-y-2">
-              <h3 className="text-base sm:text-lg font-semibold text-secondary">Conectado com Sucesso!</h3>
-              <p className="text-xs sm:text-sm text-mint-glow/70">{instanceName} está pronto para uso</p>
+              <h3 className="text-base sm:text-lg font-semibold text-white">Conectado com Sucesso!</h3>
+              <p className="text-xs sm:text-sm text-white/80">{instanceName} está pronto para uso</p>
             </div>
             <Button
               onClick={onClose}
-              className="bg-gradient-to-r from-mint-glow to-secondary hover:from-mint-glow/90 hover:to-secondary/90 text-dark-navy transition-all duration-300 w-full sm:w-auto h-10 sm:h-11 text-sm sm:text-base"
+              className="bg-white text-[#243B6B] hover:bg-white/90 transition-all duration-300 w-full sm:w-auto h-10 sm:h-11 text-sm sm:text-base font-semibold"
             >
               Fechar
             </Button>
@@ -131,12 +131,12 @@ const WhatsAppConnectionModal = ({
             </div>
             <div className="text-center space-y-2 max-w-sm">
               <h3 className="text-base sm:text-lg font-semibold text-red-400">Erro na Conexão</h3>
-              <p className="text-xs sm:text-sm text-mint-glow/70">{errorMessage || 'Não foi possível conectar ao WhatsApp'}</p>
+              <p className="text-xs sm:text-sm text-white/80">{errorMessage || 'Não foi possível conectar ao WhatsApp'}</p>
             </div>
             <Button
               onClick={onClose}
               variant="outline"
-              className="btn-destructive w-full sm:w-auto h-10 sm:h-11 text-sm sm:text-base"
+              className="border-red-400/50 text-red-400 hover:bg-red-400/10 w-full sm:w-auto h-10 sm:h-11 text-sm sm:text-base"
             >
               Fechar
             </Button>
@@ -151,10 +151,10 @@ const WhatsAppConnectionModal = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogPortal>
-        <DialogOverlay className="fixed inset-0 z-50 backdrop-blur-md bg-transparent data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <DialogContent className="w-[95vw] max-w-md sm:max-w-md bg-dark-navy-950 border border-mint-glow/30 backdrop-blur-lg shadow-2xl mx-auto">
+        <DialogOverlay className="fixed inset-0 z-50 backdrop-blur-md bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogContent className="w-[95vw] max-w-md sm:max-w-md bg-[#243B6B] border border-[#1e3257] backdrop-blur-lg shadow-2xl mx-auto">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6">
-            <DialogTitle className="text-center text-lg sm:text-xl font-bold bg-gradient-to-r from-mint-glow to-secondary bg-clip-text text-transparent">
+            <DialogTitle className="text-center text-lg sm:text-xl font-bold text-white">
               WhatsApp Web
             </DialogTitle>
           </DialogHeader>
@@ -166,7 +166,7 @@ const WhatsAppConnectionModal = ({
               <Button
                 onClick={onClose}
                 variant="outline"
-                className="min-w-[100px] w-full sm:w-auto h-10 sm:h-11 text-sm sm:text-base border-mint-glow/30 text-mint-glow hover:bg-mint-glow/10 bg-dark-navy-950/90 backdrop-blur-sm"
+                className="min-w-[100px] w-full sm:w-auto h-10 sm:h-11 text-sm sm:text-base btn-destructive"
               >
                 Cancelar
               </Button>
