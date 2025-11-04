@@ -34,25 +34,41 @@ export const useWhatsAppInstances = () => {
 
     // Verificar status das instâncias no backend
     checkInstancesStatus();
+
+    // Verificar periodicamente (a cada 15 segundos) para garantir sincronização
+    const intervalId = setInterval(() => {
+      checkInstancesStatus();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
-  // Verificar status das instâncias
+  // Verificar status de uma instância específica
+  const checkInstanceStatus = async (instanceId: number) => {
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SESSION_STATUS(`instance_${instanceId}`)}`);
+      const data = await response.json();
+      
+      if (data.connected && data.user) {
+        setInstances(prev => prev.map(instance => 
+          instance.id === instanceId ? {
+            ...instance,
+            isConnected: true,
+            phoneNumber: data.user.phoneNumber || data.user.number,
+            lastConnected: new Date()
+          } : instance
+        ));
+      }
+    } catch (error) {
+      console.error(`Erro ao verificar status da instância ${instanceId}:`, error);
+    }
+  };
+
+  // Verificar status de todas as instâncias
   const checkInstancesStatus = async () => {
     try {
       for (let i = 1; i <= 4; i++) {
-        const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SESSION_STATUS(`instance_${i}`)}`);
-        const data = await response.json();
-        
-        if (data.connected && data.user) {
-          setInstances(prev => prev.map(instance => 
-            instance.id === i ? {
-              ...instance,
-              isConnected: true,
-              phoneNumber: data.user.number,
-              lastConnected: new Date()
-            } : instance
-          ));
-        }
+        await checkInstanceStatus(i);
       }
     } catch (error) {
       console.error('Erro ao verificar status das instâncias:', error);
@@ -100,35 +116,43 @@ export const useWhatsAppInstances = () => {
     };
 
     const handleConnected = (event: CustomEvent) => {
-      const { sessionId } = event.detail;
+      const { sessionId, user } = event.detail;
       const instanceId = parseInt(sessionId.split('_')[1]);
       
-      // Atualizar instância como conectada
+      console.log('🔥 useWhatsAppInstances - handleConnected:', { sessionId, instanceId, user });
+      
+      // Atualizar instância como conectada SEMPRE (independente de quem conectou)
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId ? {
           ...instance,
           isConnected: true,
           qrCode: undefined,
+          phoneNumber: user?.phoneNumber || user?.number,
           lastConnected: new Date()
         } : instance
       ));
       
-      // Atualizar modal para mostrar sucesso
+      // Atualizar modal para mostrar sucesso (apenas se for este usuário que está conectando)
       if (modalState.isOpen && modalState.instanceId === instanceId) {
         setModalState(prev => ({ ...prev, connectionState: 'connected' }));
+        setIsGeneratingQR(null);
       }
       
-      setIsGeneratingQR(null);
+      // Buscar informações do usuário conectado
+      checkInstanceStatus(instanceId);
     };
 
     const handleUserInfo = (event: CustomEvent) => {
       const { sessionId, user } = event.detail;
       const instanceId = parseInt(sessionId.split('_')[1]);
       
+      // Atualizar informações do usuário SEMPRE (independente de quem conectou)
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId ? {
           ...instance,
-          phoneNumber: user.number
+          isConnected: true,
+          phoneNumber: user?.phoneNumber || user?.number,
+          lastConnected: new Date()
         } : instance
       ));
     };
@@ -137,27 +161,29 @@ export const useWhatsAppInstances = () => {
       const { sessionId, user } = event.detail;
       const instanceId = parseInt(sessionId.split('_')[1]);
       
+      // Atualizar instância como conectada SEMPRE (independente de quem tentou conectar)
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId ? {
           ...instance,
           isConnected: true,
-          phoneNumber: user?.number,
-          qrCode: undefined
+          phoneNumber: user?.phoneNumber || user?.number,
+          qrCode: undefined,
+          lastConnected: new Date()
         } : instance
       ));
       
-      // Fechar modal se já estiver conectado
+      // Fechar modal se já estiver conectado (apenas se for este usuário)
       if (modalState.isOpen && modalState.instanceId === instanceId) {
         setModalState({ isOpen: false, instanceId: null, connectionState: 'generating' });
+        setIsGeneratingQR(null);
       }
-      
-      setIsGeneratingQR(null);
     };
 
     const handleLoggedOut = (event: CustomEvent) => {
       const { sessionId } = event.detail;
       const instanceId = parseInt(sessionId.split('_')[1]);
       
+      // Atualizar instância como desconectada SEMPRE (independente de quem desconectou)
       setInstances(prev => prev.map(instance => 
         instance.id === instanceId ? {
           ...instance,

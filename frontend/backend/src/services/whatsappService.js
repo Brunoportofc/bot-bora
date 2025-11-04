@@ -161,16 +161,31 @@ class WhatsAppService {
       const session = sessions.get(sessionId);
       if (session?.socket) {
         const user = session.socket.user;
+        const userData = {
+          id: user.id,
+          name: user.name,
+          phoneNumber: user.id.split(':')[0]
+        };
+        
+        logger.info(`📡 Emitindo evento 'connected' via BROADCAST para TODOS os clientes:`, {
+          sessionId,
+          user: userData
+        });
+        
         this.io.emit('connected', { 
           sessionId,
-          user: {
-            id: user.id,
-            name: user.name,
-            phoneNumber: user.id.split(':')[0]
-          }
+          user: userData,
+          message: `WhatsApp conectado: ${userData.phoneNumber}`
+        });
+        
+        // Também emitir evento de user-info para atualizar informações
+        this.io.emit('user-info', {
+          sessionId,
+          user: userData
         });
       }
     } else if (connection === 'connecting') {
+      logger.info(`📡 Emitindo evento 'connecting' via BROADCAST para sessão: ${sessionId}`);
       this.io.emit('connecting', { sessionId });
     }
   }

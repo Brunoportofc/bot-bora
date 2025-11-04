@@ -111,17 +111,19 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       }));
     });
 
-    socketInstance.on('connected', ({ sessionId, message }) => {
+    socketInstance.on('connected', ({ sessionId, message, user }) => {
+      console.log('✅ Evento "connected" recebido:', { sessionId, user, message });
       toast({
         title: "WhatsApp Conectado",
-        description: message,
+        description: message || `Instância ${sessionId} conectada`,
       });
       window.dispatchEvent(new CustomEvent('whatsapp-connected', { 
-        detail: { sessionId } 
+        detail: { sessionId, user } 
       }));
     });
 
     socketInstance.on('user-info', ({ sessionId, user }) => {
+      console.log('👤 Evento "user-info" recebido:', { sessionId, user });
       window.dispatchEvent(new CustomEvent('whatsapp-user-info', { 
         detail: { sessionId, user } 
       }));
