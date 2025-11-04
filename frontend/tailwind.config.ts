@@ -63,22 +63,44 @@ const config: Config = {
           ring: "hsl(var(--sidebar-ring))",
         },
         // Cores customizadas do projeto
-        'dark-navy': {
-          DEFAULT: '#0f1932',
-          '950': 'hsl(218, 54%, 4%)',
+        'bora-blue': {
+          DEFAULT: '#006BA6',
+          '50': '#E6F4FA',
+          '100': '#CCE9F5',
+          '200': '#99D3EB',
+          '300': '#66BCE1',
+          '400': '#33A6D7',
+          '500': '#006BA6',
+          '600': '#005585',
+          '700': '#004064',
+          '800': '#002A42',
+          '900': '#001521',
         },
-        'mint-glow': {
-          DEFAULT: '#75d3af',
-          '50': '#f0fdf9',
-          '100': '#ccfdf0',
-          '200': '#99f6e0',
-          '300': '#5de9cb',
-          '400': '#22d3aa',
-          '500': '#75d3af',
-          '600': '#059669',
-          '700': '#047857',
-          '800': '#065f46',
-          '900': '#064e3b',
+        'bora-red': {
+          DEFAULT: '#E31E24',
+          '50': '#fef2f2',
+          '100': '#fee2e2',
+          '200': '#fecaca',
+          '300': '#fca5a5',
+          '400': '#f87171',
+          '500': '#ef4444',
+          '600': '#E31E24',
+          '700': '#b91c1c',
+          '800': '#991b1b',
+          '900': '#7f1d1d',
+        },
+        'bora-yellow': {
+          DEFAULT: '#FFD700',
+          '50': '#fffbeb',
+          '100': '#fef3c7',
+          '200': '#fde68a',
+          '300': '#fcd34d',
+          '400': '#fbbf24',
+          '500': '#f59e0b',
+          '600': '#FFD700',
+          '700': '#a16207',
+          '800': '#854d0e',
+          '900': '#713f12',
         }
       },
       borderRadius: {
@@ -125,4 +147,4 @@ const config: Config = {
   plugins: [],
 } satisfies Config;
 
-export default config; 
+export default config;

@@ -1,10 +1,10 @@
-// Configuração da API - FORÇANDO LOCALHOST
+// Configuração da API
 const API_CONFIG = {
-  // URL base do backend - SEMPRE localhost:3001
-  BASE_URL: 'http://localhost:3001',
+  // URL base do backend - usa variável de ambiente ou domínio de produção
+  BASE_URL: import.meta.env.VITE_API_URL || 'https://bora.factoriasolutions.com',
   
-  // URL para Socket.IO - SEMPRE localhost:3001
-  SOCKET_URL: 'http://localhost:3001',
+  // URL para Socket.IO
+  SOCKET_URL: import.meta.env.VITE_API_URL || 'https://bora.factoriasolutions.com',
   
   // Endpoints da API
   ENDPOINTS: {

@@ -7,7 +7,7 @@ import logger from './config/logger.js';
 import WhatsAppService from './services/whatsappService.js';
 import WhatsAppController from './controllers/whatsappController.js';
 import createWhatsAppRoutes from './routes/whatsappRoutes.js';
-import './config/firebase.js'; // Inicializar Firebase
+
 
 dotenv.config();
 
@@ -191,6 +191,31 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Obter status do AI
+  socket.on('get-ai-status', async () => {
+    try {
+      const sessions = whatsappService.getAllSessions();
+      const activeInstances = sessions.filter(s => s.connected).length;
+      
+      // Por enquanto, retornamos valores padrão
+      // Futuramente, estes valores podem ser obtidos de um banco de dados ou cache
+      socket.emit('ai-status-response', {
+        activeInstances: activeInstances,
+        totalMessages: 0,
+        averageResponseTime: 0,
+        errors: 0
+      });
+    } catch (error) {
+      logger.error('Erro ao obter status do AI:', error);
+      socket.emit('ai-status-response', {
+        activeInstances: 0,
+        totalMessages: 0,
+        averageResponseTime: 0,
+        errors: 0
+      });
+    }
+  });
+
   socket.on('disconnect', () => {
     logger.info(`Cliente desconectado: ${socket.id}`);
   });
@@ -216,21 +241,37 @@ app.use((req, res) => {
 // Iniciar servidor
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
-  console.log('='.repeat(60));
-  console.log('');
-  console.log('   WhatsApp AI Backend Server');
-  console.log('');
-  console.log(`   Servidor rodando em: http://localhost:${PORT}`);
-  console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-  console.log('   Firebase: Configurado');
-  console.log('   Socket.io: Ativo');
-  console.log('   CORS: Vercel habilitado (.vercel.app)');
-  console.log('');
-  console.log('   Pronto para receber conexoes WhatsApp!');
-  console.log('');
-  console.log('='.repeat(60));
-});
+// Start server after attempting to restore sessions from disk
+async function startServer() {
+  try {
+    // Tentar restaurar sessões persistidas (se houver)
+    if (typeof whatsappService.restoreSessions === 'function') {
+      logger.info('Chamando restoreSessions para restaurar sessões salvas...');
+      const result = await whatsappService.restoreSessions();
+      logger.info('Resultado da restauração de sessões:', result);
+    }
+  } catch (err) {
+    logger.error('Erro ao restaurar sessões na inicialização:', err);
+  }
+
+  httpServer.listen(PORT, () => {
+    console.log('='.repeat(60));
+    console.log('');
+    console.log('   WhatsApp AI Backend Server');
+    console.log('');
+    console.log(`   Servidor rodando em: http://localhost:${PORT}`);
+    console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+
+    console.log('   Socket.io: Ativo');
+    console.log('   CORS: Vercel habilitado (.vercel.app)');
+    console.log('');
+    console.log('   Pronto para receber conexoes WhatsApp!');
+    console.log('');
+    console.log('='.repeat(60));
+  });
+}
+
+startServer();
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
@@ -240,7 +281,8 @@ process.on('SIGINT', async () => {
   const sessions = whatsappService.getAllSessions();
   for (const session of sessions) {
     try {
-      await whatsappService.logout(session.sessionId);
+      // Durante shutdown não remover arquivos de sessão — preserva credenciais para restore
+      await whatsappService.logout(session.sessionId, { removeFiles: false });
     } catch (error) {
       logger.error(`Erro ao fechar sessão ${session.sessionId}:`, error);
     }

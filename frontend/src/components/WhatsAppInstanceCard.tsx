@@ -67,6 +67,8 @@ const WhatsAppInstanceCard = ({
             systemPrompt: data.config.systemPrompt,
             temperature: data.config.temperature,
             assistantId: data.config.assistantId,
+            ttsEnabled: data.config.ttsEnabled || false,
+            ttsVoice: data.config.ttsVoice || 'Aoede',
           });
         }
       }
@@ -211,7 +213,7 @@ const WhatsAppInstanceCard = ({
             <Button
               onClick={() => onGenerateQR(instance.id)}
               disabled={isGeneratingQR}
-              className="w-full bg-gradient-to-r from-mint-glow to-secondary hover:from-mint-glow/90 hover:to-secondary/90 text-dark-navy transition-all duration-300 rounded-xl h-10 sm:h-11 text-sm sm:text-base"
+              className="w-full btn-qr-code rounded-xl h-10 sm:h-11 text-sm sm:text-base"
             >
               Gerar QR Code
             </Button>
@@ -276,17 +278,17 @@ const WhatsAppInstanceCard = ({
         {instance.isConnected && !isDisconnecting && (
           <div className="space-y-3 sm:space-y-4">
             {/* Status da Configuração */}
-            {agentConfig && agentConfig.apiKey && (
+            {agentConfig && (agentConfig.apiKey || agentConfig.systemPrompt) && (
               <div className="p-3 bg-secondary/10 rounded-xl border border-secondary/30">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Bot className="w-5 h-5 text-secondary" />
                     <div>
                       <p className="text-sm font-medium text-mint-glow">
-                        Assistente Configurado
+                        Assistente IA Configurado
                       </p>
                       <p className="text-xs text-mint-glow/60">
-                        {agentConfig.aiProvider === 'gemini' ? 'Google Gemini' : 'OpenAI'} • {agentConfig.model || 'GPT Assistant'}
+                        Pronto para responder mensagens
                       </p>
                     </div>
                   </div>
@@ -298,10 +300,10 @@ const WhatsAppInstanceCard = ({
             {/* Botões de Ação */}
             <Button
               onClick={() => setIsAgentModalOpen(true)}
-              className="w-full bg-gradient-to-r from-mint-glow to-secondary hover:from-mint-glow/90 hover:to-secondary/90 text-dark-navy transition-all duration-300 rounded-xl h-10 sm:h-11 text-sm sm:text-base flex items-center gap-2"
+              className="w-full btn-qr-code rounded-xl h-10 sm:h-11 text-sm sm:text-base flex items-center gap-2"
             >
               <Settings className="w-4 h-4" />
-              {agentConfig && agentConfig.apiKey ? 'Editar Agente' : 'Configurar Agente'}
+              {agentConfig && (agentConfig.apiKey || agentConfig.systemPrompt) ? 'Editar Agente' : 'Configurar Agente'}
             </Button>
 
             <Button

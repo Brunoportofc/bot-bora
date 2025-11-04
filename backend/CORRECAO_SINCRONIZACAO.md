@@ -124,7 +124,7 @@ No backend, procure por:
    - Polling adicionado
    - Logs de debug
 
-2. `frontend/backend/src/services/whatsappService.js`
+2. `backend/src/services/whatsappService.js`
    - Evento adicional `user-info`
    - Logs melhorados
 
@@ -156,4 +156,3 @@ Com essas correções, o sistema agora:
 - ✅ Tem sistema de backup (polling) para garantir sincronização
 - ✅ Logs completos para debugging
 - ✅ Todos os eventos são broadcasted para todos os clientes
-

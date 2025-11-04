@@ -11,55 +11,121 @@ let pdfParse;
 // Cache de histórico por número de telefone
 const userConversations = new Map();
 
+// Configurações fixas do sistema
+const FIXED_MODEL = 'gemini-2.5-flash';
+const FIXED_TEMPERATURE = 1.0;
+
+// Diretrizes fixas que SEMPRE serão aplicadas
+const SYSTEM_GUIDELINES = `
+Diretrizes:
+- Seja sempre educado e respeitoso
+- Forneça respostas precisas e úteis
+- Se não souber algo, admita honestamente
+- Adapte seu tom ao contexto da conversa
+- Mantenha as respostas concisas quando possível
+`;
+
+/**
+ * Combina o prompt personalizado do usuário com as diretrizes fixas do sistema
+ */
+function buildSystemPrompt(customPrompt = '') {
+  if (customPrompt && customPrompt.trim()) {
+    return `${customPrompt.trim()}\n\n${SYSTEM_GUIDELINES}`;
+  }
+  return `Você é um assistente virtual prestativo e profissional.\n${SYSTEM_GUIDELINES}`;
+}
+
 /**
  * Processa uma mensagem usando Google Gemini
  */
-export async function processMessageWithGemini(messageText, phoneNumber, apiKey, modelName = 'gemini-2.0-flash-exp', systemPrompt = '', temperature = 1.0) {
+export async function processMessageWithGemini(messageText, phoneNumber, apiKey, modelName = FIXED_MODEL, systemPrompt = '', temperature = FIXED_TEMPERATURE) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
+    console.log("enviando para gemini", messageText);
     
-    // Configuração do modelo
-    const model = genAI.getGenerativeModel({ 
-      model: modelName,
-      generationConfig: {
-        temperature: temperature,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 8192,
-      },
-      systemInstruction: systemPrompt || 'Você é um assistente virtual prestativo e profissional.'
-    });
-
+    // Sempre usar configurações fixas + prompt personalizado
+    const finalSystemPrompt = buildSystemPrompt(systemPrompt);
+    
+    // Criar chave única APENAS com phoneNumber para manter histórico contínuo
+    const conversationKey = phoneNumber;
+    
     // Obter ou criar histórico de conversa para este usuário
-    let chat = userConversations.get(phoneNumber);
+    let conversationData = userConversations.get(conversationKey);
     
-    if (!chat) {
-      chat = model.startChat({
+    if (!conversationData) {
+      // Criar nova conversa APENAS se não existir
+      // Configuração do modelo
+      const model = genAI.getGenerativeModel({ 
+        model: FIXED_MODEL,
+        generationConfig: {
+          temperature: FIXED_TEMPERATURE,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 8192,
+        },
+        systemInstruction: finalSystemPrompt
+      });
+      
+      const chat = model.startChat({
         history: [],
       });
-      userConversations.set(phoneNumber, chat);
-      logger.info(`Nova conversa iniciada para ${phoneNumber}`);
+      
+      conversationData = {
+        chat,
+        model,
+        systemPrompt: finalSystemPrompt
+      };
+      
+      userConversations.set(conversationKey, conversationData);
+      logger.info(`🆕 Nova conversa iniciada para ${phoneNumber}`);
+    } else {
+      logger.info(`♻️ Usando conversa existente para ${phoneNumber} (${userConversations.get(conversationKey).chat.history?.length || 0} mensagens no histórico)`);
     }
+    
+    const { chat } = conversationData;
 
     logger.info('===== ENVIANDO MENSAGEM PARA GEMINI =====');
     logger.info(`Telefone: ${phoneNumber}`);
-    logger.info(`Modelo: ${modelName}`);
-    logger.info(`Temperatura: ${temperature}`);
-    logger.info(`Prompt do Sistema: ${systemPrompt || 'Padrão'}`);
+    logger.info(`Modelo: ${FIXED_MODEL} (fixo)`);
+    logger.info(`Temperatura: ${FIXED_TEMPERATURE} (fixa)`);
+    logger.info(`Prompt Personalizado: ${systemPrompt || 'Nenhum'}`);
+    logger.info(`Prompt Final (com diretrizes): ${finalSystemPrompt.substring(0, 100)}...`);
     logger.info(`Mensagem (${messageText.length} caracteres):`, messageText);
     logger.info('==========================================');
     
-    // Enviar mensagem
-    const result = await chat.sendMessage(messageText);
-    const response = result.response.text();
-    
-    logger.info('===== RESPOSTA RECEBIDA DO GEMINI =====');
-    logger.info(`Telefone: ${phoneNumber}`);
-    logger.info(`Resposta (${response.length} caracteres):`, response);
-    logger.info('========================================');
-    
-    return response;
-
+    try {
+      const result = await chat.sendMessage(messageText);
+      const response = result.response;
+  
+      // VERIFICAÇÃO DE SEGURANÇA: Checa se a resposta tem conteúdo válido
+      if (response.candidates && response.candidates.length > 0 && response.candidates[0].content) {
+        const responseText = response.text(); // Agora é seguro chamar .text()
+        
+        logger.info('===== RESPOSTA VÁLIDA RECEBIDA DO GEMINI =====');
+        logger.info(`Telefone: ${phoneNumber}`);
+        logger.info(`Resposta (${responseText.length} caracteres): ${responseText}`);
+        logger.info('========================================');
+        
+        return responseText;
+  
+      } else {
+        // A API respondeu, mas bloqueou a resposta ou não gerou conteúdo.
+        const finishReason = response.candidates?.[0]?.finishReason || 'Desconhecido';
+        logger.warn('===== RESPOSTA DO GEMINI SEM CONTEÚDO =====');
+        logger.warn(`Telefone: ${phoneNumber}`);
+        logger.warn(`Motivo do término: ${finishReason}`);
+        logger.warn('Resposta completa para depuração:', JSON.stringify(response, null, 2));
+        logger.warn('=========================================');
+  
+        // Retorne uma mensagem padrão para o usuário final
+        return "Desculpe, não consegui processar sua mensagem. Por favor, tente reformulá-la.";
+      }
+    } catch (error) {
+      // Registrar como WARN: a chamada ao Gemini falhou, mas retornamos uma mensagem de fallback
+      // para que a conversa do usuário continue (evita crash no pipeline).
+      logger.warn('Erro ao processar mensagem com Gemini (retornando fallback):', error);
+      return 'Desculpe, estou com dificuldades para processar sua mensagem no momento. Tente novamente em instantes.';
+    }
   } catch (error) {
     logger.error('❌ ERRO COMPLETO AO PROCESSAR COM GEMINI:');
     logger.error('==============================================');
@@ -164,7 +230,7 @@ export async function transcribeAudio(audioBuffer, apiKey, prompt = '') {
 /**
  * Analisa imagem usando Google Gemini Vision
  */
-export async function analyzeImage(imageBuffer, apiKey, modelName = 'gemini-2.0-flash-exp', prompt = '', systemPrompt = '') {
+export async function analyzeImage(imageBuffer, apiKey, modelName = FIXED_MODEL, prompt = '', systemPrompt = '') {
   try {
     logger.info('Iniciando análise de imagem com Gemini...', {
       bufferSize: imageBuffer.length,
@@ -181,9 +247,11 @@ export async function analyzeImage(imageBuffer, apiKey, modelName = 'gemini-2.0-
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    const finalSystemPrompt = buildSystemPrompt(systemPrompt || 'Você é um assistente especializado em análise de imagens.');
+    
     const model = genAI.getGenerativeModel({ 
-      model: modelName,
-      systemInstruction: systemPrompt || 'Você é um assistente especializado em análise de imagens.'
+      model: FIXED_MODEL,
+      systemInstruction: finalSystemPrompt
     });
 
     // Converter buffer para base64
@@ -323,9 +391,9 @@ async function extractTextFromPDF(pdfBuffer) {
 /**
  * Processa mensagem com imagem usando Gemini Vision
  */
-export async function processImageMessageWithGemini(imageBuffer, phoneNumber, apiKey, modelName, systemPrompt, temperature, caption = '') {
+export async function processImageMessageWithGemini(imageBuffer, phoneNumber, apiKey, modelName = FIXED_MODEL, systemPrompt = '', temperature = FIXED_TEMPERATURE, caption = '') {
   try {
-    logger.info(`Processando mensagem com imagem para ${phoneNumber}`);
+    logger.info(`Processando mensagem com imagem para ${phoneNumber} - Modelo: ${FIXED_MODEL}`);
     
     // Criar prompt combinado
     let fullPrompt = '';
@@ -336,8 +404,8 @@ export async function processImageMessageWithGemini(imageBuffer, phoneNumber, ap
       fullPrompt = 'Analise esta imagem e forneça uma resposta detalhada e útil.';
     }
     
-    // Analisar a imagem diretamente com o Gemini
-    const analysis = await analyzeImage(imageBuffer, apiKey, modelName, fullPrompt, systemPrompt);
+    // Analisar a imagem diretamente com o Gemini (sempre usa configurações fixas)
+    const analysis = await analyzeImage(imageBuffer, apiKey, FIXED_MODEL, fullPrompt, systemPrompt);
     
     logger.info('Imagem processada com Gemini Vision');
     
@@ -355,9 +423,9 @@ export async function processImageMessageWithGemini(imageBuffer, phoneNumber, ap
 /**
  * Processa mensagem com documento usando Gemini
  */
-export async function processDocumentMessageWithGemini(documentBuffer, filename, phoneNumber, apiKey, modelName, systemPrompt, temperature, caption = '') {
+export async function processDocumentMessageWithGemini(documentBuffer, filename, phoneNumber, apiKey, modelName = FIXED_MODEL, systemPrompt = '', temperature = FIXED_TEMPERATURE, caption = '') {
   try {
-    logger.info(`Processando documento para ${phoneNumber}: ${filename}`);
+    logger.info(`Processando documento para ${phoneNumber}: ${filename} - Modelo: ${FIXED_MODEL}`);
     
     // 1. Processar o documento
     const documentContent = await processDocument(documentBuffer, filename);
@@ -372,8 +440,8 @@ export async function processDocumentMessageWithGemini(documentBuffer, filename,
     
     fullMessage += `\n\nPor favor, analise o conteúdo do documento e forneça uma resposta útil e clara.`;
     
-    // 3. Processar com o Gemini
-    const aiResponse = await processMessageWithGemini(fullMessage, phoneNumber, apiKey, modelName, systemPrompt, temperature);
+    // 3. Processar com o Gemini (sempre usa configurações fixas)
+    const aiResponse = await processMessageWithGemini(fullMessage, phoneNumber, apiKey, FIXED_MODEL, systemPrompt, FIXED_TEMPERATURE);
     
     return {
       documentContent,
@@ -388,19 +456,111 @@ export async function processDocumentMessageWithGemini(documentBuffer, filename,
 }
 
 /**
- * Processa mensagem de áudio (não suportado ainda)
+ * Processa mensagem de áudio usando Gemini
  */
-export async function processAudioMessageWithGemini(audioBuffer, phoneNumber, apiKey, modelName, systemPrompt, temperature) {
+export async function processAudioMessageWithGemini(audioBuffer, phoneNumber, apiKey, modelName = FIXED_MODEL, systemPrompt = '', temperature = FIXED_TEMPERATURE) {
   try {
-    logger.info(`Processamento de áudio ainda não suportado para ${phoneNumber}`);
+    logger.info(`🎤 Processando mensagem de áudio para ${phoneNumber}`, {
+      audioSize: audioBuffer.length,
+      model: FIXED_MODEL
+    });
+
+    const genAI = new GoogleGenerativeAI(apiKey);
     
+    // Converter buffer para base64
+    const base64Audio = audioBuffer.toString('base64');
+    
+    // Sempre usar configurações fixas + prompt personalizado
+    const finalSystemPrompt = buildSystemPrompt(systemPrompt);
+    
+    // Criar chave única APENAS com phoneNumber para manter histórico contínuo (mesma chave que texto!)
+    const conversationKey = phoneNumber;
+    
+    // Obter ou criar histórico de conversa para este usuário
+    let conversationData = userConversations.get(conversationKey);
+    
+    if (!conversationData) {
+      // Criar nova conversa APENAS se não existir
+      // Configuração do modelo
+      const model = genAI.getGenerativeModel({ 
+        model: FIXED_MODEL,
+        generationConfig: {
+          temperature: FIXED_TEMPERATURE,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 8192,
+        },
+        systemInstruction: finalSystemPrompt
+      });
+      
+      const chat = model.startChat({
+        history: [],
+      });
+      
+      conversationData = {
+        chat,
+        model,
+        systemPrompt: finalSystemPrompt
+      };
+      
+      userConversations.set(conversationKey, conversationData);
+      logger.info(`🆕 Nova conversa iniciada para áudio de ${phoneNumber}`);
+    } else {
+      logger.info(`♻️ Usando conversa existente para áudio de ${phoneNumber} (${userConversations.get(conversationKey).chat.history?.length || 0} mensagens no histórico)`);
+    }
+    
+    const { model, chat } = conversationData;
+
+    logger.info(`🎤 Enviando áudio para transcrição e análise...`);
+
+    // Primeiro, obter a transcrição (usa o mesmo modelo do chat!)
+    const transcriptionResult = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: "audio/ogg",
+          data: base64Audio
+        }
+      },
+      "Transcreva este áudio em português, mantendo toda a pontuação e emoção da mensagem original."
+    ]);
+
+    const transcription = transcriptionResult.response.text();
+    logger.info(`✅ Transcrição obtida: "${transcription.substring(0, 100)}..."`);
+
+    // Agora, gerar resposta baseada na transcrição usando o MESMO chat
+    logger.info(`🤖 Iniciando geração de resposta para áudio...`);
+    logger.info(`📤 Enviando transcrição para gerar resposta...`);
+    
+    const result = await chat.sendMessage(`[Mensagem de Áudio]: ${transcription}`);
+    const aiResponse = result.response.text();
+
+    logger.info(`✅ Resposta gerada para áudio: "${aiResponse.substring(0, 100)}..."`);
+
+    // Não precisa atualizar histórico manualmente - o chat.sendMessage já faz isso
+
     return {
-      transcription: 'Áudio recebido',
-      aiResponse: 'Desculpe, ainda não consigo processar mensagens de áudio. Por favor, envie sua mensagem como texto.'
+      transcription,
+      aiResponse
     };
+
   } catch (error) {
-    logger.error('Erro ao processar mensagem de áudio:', error);
-    throw error;
+    logger.error('❌ Erro ao processar mensagem de áudio:', {
+      error: error.message,
+      stack: error.stack,
+      phoneNumber,
+      errorType: error.constructor.name,
+      errorCode: error.code,
+      errorStatus: error.status
+    });
+    
+    // Log do erro completo para debug
+    logger.error('Detalhes completos do erro:', error);
+
+    // Fallback em caso de erro
+    return {
+      transcription: '[Erro ao transcrever]',
+      aiResponse: 'Desculpe, tive dificuldade em processar seu áudio. Pode enviar como texto ou tentar novamente?'
+    };
   }
 }
 
@@ -408,8 +568,15 @@ export async function processAudioMessageWithGemini(audioBuffer, phoneNumber, ap
  * Limpa o histórico de conversa de um usuário
  */
 export function clearUserConversation(phoneNumber) {
-  userConversations.delete(phoneNumber);
-  logger.info(`Conversa removida para ${phoneNumber}`);
+  // Limpar todas as conversas deste número (pode ter múltiplos system prompts)
+  const keysToDelete = [];
+  for (const key of userConversations.keys()) {
+    if (key.startsWith(phoneNumber)) {
+      keysToDelete.push(key);
+    }
+  }
+  keysToDelete.forEach(key => userConversations.delete(key));
+  logger.info(`Conversa(s) removida(s) para ${phoneNumber}`);
 }
 
 /**

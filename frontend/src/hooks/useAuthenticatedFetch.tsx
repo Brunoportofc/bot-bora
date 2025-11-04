@@ -1,25 +1,14 @@
 import { useCallback } from 'react';
-import { auth } from '@/lib/firebase';
 
 export const useAuthenticatedFetch = () => {
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
     try {
-      // Obter token do usuário atual
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      const token = await user.getIdToken();
-
-      // Adicionar header de autorização
+      // Fazer a requisição sem autenticação
       const headers = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
         ...options.headers,
       };
 
-      // Fazer a requisição
       const response = await fetch(url, {
         ...options,
         headers,
@@ -27,7 +16,7 @@ export const useAuthenticatedFetch = () => {
 
       return response;
     } catch (error) {
-      console.error('Erro na requisição autenticada:', error);
+      console.error('Erro na requisição:', error);
       throw error;
     }
   }, []);

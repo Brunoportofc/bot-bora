@@ -1,6 +1,5 @@
 import express from 'express';
 import multer from 'multer';
-import { verifyFirebaseToken } from '../middleware/authMiddleware.js';
 
 // Configurar multer para upload de arquivos em memória
 const upload = multer({ 
@@ -12,12 +11,6 @@ const upload = multer({
 
 const createWhatsAppRoutes = (whatsappController) => {
   const router = express.Router();
-
-  // Rota de teste sem autenticação para debug
-  router.post('/qr-test/:sessionId', (req, res) => whatsappController.generateQR(req, res));
-
-  // Todas as outras rotas requerem autenticação
-  router.use(verifyFirebaseToken);
 
   // Gerar QR Code para nova sessão
   router.post('/qr/:sessionId', (req, res) => whatsappController.generateQR(req, res));
